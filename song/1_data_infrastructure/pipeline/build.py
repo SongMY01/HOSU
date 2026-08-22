@@ -24,7 +24,7 @@ WALK_5MIN_METERS = 400  # 도보 5분 기준 (국립재난안전연구원 분석
 
 # 정적 위험도 가중치 (합 1.0). 농업인 비율(0.25) 제거 후 나머지에 비례 재배분.
 WEIGHTS = {
-    "elderly": 0.47,   # 고령인구 비율 (연령대별 블렌드, ELDERLY_AGE_WEIGHTS 참고)
+    "elderly": 0.47,   # 고령인구 비율 (초고령 쏠림 보정 포함, ELDERLY_SKEW_MAX_ADJ 참고)
     "shelter": 0.33,   # 쉼터 접근성 결핍
     "history": 0.20,   # 과거 온열질환 발생
 }
