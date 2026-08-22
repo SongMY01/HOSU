@@ -25,13 +25,8 @@ show("1. 의성군 위험도", unwrap(S.get_heat_risk_score)("의성군"))
 show("2. 우선대응 상위 5개 시군", unwrap(S.list_high_priority_regions)(5, "sigungu"))
 show("3. 청송군 쉼터 접근성", unwrap(S.get_shelter_coverage)("청송군"))
 show("4. 영양군 취약인구", unwrap(S.get_vulnerable_population)("영양군"))
-
-res = unwrap(S.find_uncovered_regions)(55.0)
-res["regions"] = res["regions"][:5]
-show("5. 사각지대 (상위 5건만)", res)
-
-show("6. 포항시 구룡포읍 인근 쉼터 위치 (반경 1.5km)", unwrap(S.get_nearby_shelters)("포항시 구룡포읍", radius_m=1500, limit=3))
-show("7. '행정복지센터' 쉼터 검색 (안동시)", unwrap(S.search_shelters)("행정복지센터", sigungu="안동시", limit=3))
-show("8. 경산시 압량읍 실시간 기상 실측 (gyeongbuk_weather.csv)", unwrap(S.get_current_weather)("경산시 압량읍"))
+show("5. 포항시 구룡포읍 인근 쉼터 위치 (반경 1.5km)", unwrap(S.get_nearby_shelters)("포항시 구룡포읍", radius_m=1500, limit=3))
+show("6. '행정복지센터' 쉼터 검색 (안동시)", unwrap(S.search_shelters)("행정복지센터", sigungu="안동시", limit=3))
+show("7. 경산시 압량읍 실시간 기상 실측 (gyeongbuk_weather.csv)", unwrap(S.get_current_weather)("경산시 압량읍"))
 
 

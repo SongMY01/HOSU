@@ -70,14 +70,11 @@ def api_regions():
                sa.nearest_distance_m, sa.is_blind_spot,
                v.total_population, v.elderly_65_plus, v.elderly_ratio,
                v.farmer_ratio, v.solitary_elderly,
-               c.has_care_worker, c.has_village_guardian,
-               c.last_patrol_date, c.is_uncovered,
                w.temperature, w.humidity, w.feels_like, w.risk_tier, w.announce_time
         FROM regions r
         LEFT JOIN static_risk_scores s  ON r.region_code = s.region_code
         LEFT JOIN shelter_access    sa ON r.region_code = sa.region_code
         LEFT JOIN vulnerability      v ON r.region_code = v.region_code
-        LEFT JOIN channel_coverage   c ON r.region_code = c.region_code
         LEFT JOIN realtime_weather   w ON r.region_code = w.region_code
         {where}
     """, params)
@@ -110,8 +107,6 @@ def api_regions():
             reasons.append(f"도보 5분권 쉼터 없음 (최근접 {r.get('nearest_distance_m') or 0:.0f}m)")
         if (r.get("history_score") or 0) >= 60:
             reasons.append("과거 온열질환 발생 이력 상위권")
-        if r.get("is_uncovered"):
-            reasons.append("대응 채널 미배정 사각지대")
         r["reasons"] = reasons or ["특이 위험 요소 없음"]
 
     return jsonify({"as_of": datetime.now().isoformat(timespec="seconds"),
@@ -121,18 +116,18 @@ def api_regions():
 @app.route("/api/summary")
 def api_summary():
     """대시보드 요약 통계."""
-    total   = db("SELECT COUNT(*) c FROM regions")[0]["c"]
-    sigungu = db("SELECT COUNT(*) c FROM regions WHERE level='sigungu'")[0]["c"]
-    blind   = db("SELECT COUNT(*) c FROM shelter_access WHERE is_blind_spot=1")[0]["c"]
-    uncov   = db("SELECT COUNT(*) c FROM channel_coverage WHERE is_uncovered=1")[0]["c"]
-    avg_r   = db("SELECT AVG(static_total) a FROM static_risk_scores")[0]["a"] or 0
-    high    = db("SELECT COUNT(*) c FROM static_risk_scores WHERE static_total>=55")[0]["c"]
+    total    = db("SELECT COUNT(*) c FROM regions")[0]["c"]
+    sigungu  = db("SELECT COUNT(*) c FROM regions WHERE level='sigungu'")[0]["c"]
+    blind    = db("SELECT COUNT(*) c FROM shelter_access WHERE is_blind_spot=1")[0]["c"]
+    shelters = db("SELECT COUNT(*) c FROM shelters")[0]["c"]
+    avg_r    = db("SELECT AVG(static_total) a FROM static_risk_scores")[0]["a"] or 0
+    high     = db("SELECT COUNT(*) c FROM static_risk_scores WHERE static_total>=55")[0]["c"]
 
     return jsonify({
         "total_regions": total,
         "sigungu_count": sigungu,
         "shelter_blind_spots": blind,
-        "channel_uncovered": uncov,
+        "shelters_total": shelters,
         "avg_static_risk": round(avg_r, 1),
         "high_risk_count": high,
     })

@@ -276,57 +276,6 @@ def get_vulnerable_population(region: str) -> dict:
     }
 
 
-@mcp.tool()
-def find_uncovered_regions(min_risk: float = 50.0) -> dict:
-    """위험도가 높은데 어떤 대응 채널도 닿지 않는 사각지대를 찾는다.
-
-    생활지원사 관할도 아니고 주민생명 지킴이 순찰 대상도 아닌 지역,
-    또는 순찰한 지 오래된 지역을 반환한다. TF 자원 재배치 판단용.
-
-    Args:
-        min_risk: 이 값 이상의 정적 위험도만 대상으로 한다 (기본 50)
-    """
-    rows = q(
-        "SELECT r.region_code, r.sigungu, r.eupmyeondong, s.static_total, "
-        "c.has_care_worker, c.has_village_guardian, c.last_patrol_date, c.is_uncovered "
-        "FROM regions r "
-        "JOIN static_risk_scores s ON r.region_code = s.region_code "
-        "JOIN channel_coverage c ON r.region_code = c.region_code "
-        "WHERE s.static_total >= ? ORDER BY s.static_total DESC", (min_risk,))
-
-    today = datetime.now().date()
-    out = []
-    for r in rows:
-        gap_days = None
-        if r["last_patrol_date"]:
-            try:
-                gap_days = (today - datetime.strptime(
-                    r["last_patrol_date"], "%Y-%m-%d").date()).days
-            except ValueError:
-                pass
-
-        flags = []
-        if r["is_uncovered"]:
-            flags.append("어떤 채널도 미배정")
-        if gap_days is not None and gap_days >= 3:
-            flags.append(f"순찰 공백 {gap_days}일")
-        if not flags:
-            continue
-
-        out.append({
-            "region_code": r["region_code"],
-            "region_name": region_label(r),
-            "static_risk": r["static_total"],
-            "has_care_worker": bool(r["has_care_worker"]),
-            "has_village_guardian": bool(r["has_village_guardian"]),
-            "last_patrol_date": r["last_patrol_date"],
-            "flags": flags,
-        })
-
-    return {"as_of": today.isoformat(), "min_risk": min_risk,
-            "count": len(out), "regions": out}
-
-
 def haversine_m(lat1, lon1, lat2, lon2):
     """두 좌표 간 거리(m)."""
     R = 6371000.0

@@ -56,16 +56,7 @@ CREATE TABLE IF NOT EXISTS static_risk_scores (
     computed_at        TEXT
 );
 
--- 6. 채널 커버리지 (TF 대시보드용, 시뮬레이션 데이터 포함)
-CREATE TABLE IF NOT EXISTS channel_coverage (
-    region_code           TEXT PRIMARY KEY REFERENCES regions(region_code),
-    has_care_worker       INTEGER,        -- 생활지원사 관할 여부
-    has_village_guardian  INTEGER,        -- 주민생명 지킴이 순찰 대상 여부
-    last_patrol_date      TEXT,           -- 마지막 순찰일 (YYYY-MM-DD)
-    is_uncovered          INTEGER         -- 1이면 어떤 채널도 닿지 않음
-);
-
--- 7. 무더위쉼터 마스터 위치 및 상세 시설 정보
+-- 6. 무더위쉼터 마스터 위치 및 상세 시설 정보
 CREATE TABLE IF NOT EXISTS shelters (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     sigungu        TEXT NOT NULL,          -- 시군명 (포항시, 의성군 등)
