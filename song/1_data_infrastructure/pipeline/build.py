@@ -22,13 +22,23 @@ SCHEMA_PATH = os.path.join(BASE_DIR, "pipeline", "schema.sql")
 
 WALK_5MIN_METERS = 400  # 도보 5분 기준 (국립재난안전연구원 분석 기준 차용)
 
-# 정적 위험도 가중치 (합 1.0)
+# 정적 위험도 가중치 (합 1.0). 농업인 비율(0.25) 제거 후 나머지에 비례 재배분.
 WEIGHTS = {
-    "elderly": 0.35,   # 고령인구 비율
-    "farmer": 0.25,    # 농업인 비율 (야외노출)
-    "shelter": 0.25,   # 쉼터 접근성 결핍
-    "history": 0.15,   # 과거 온열질환 발생
+    "elderly": 0.47,   # 고령인구 비율 (연령대별 블렌드, ELDERLY_AGE_WEIGHTS 참고)
+    "shelter": 0.33,   # 쉼터 접근성 결핍
+    "history": 0.20,   # 과거 온열질환 발생
 }
+
+# 고령인구 점수 = 65세 이상 비율(0~100)을 기준선으로 두고, 초고령 쏠림으로 ±보정.
+#
+# 폭염 초과사망 위험은 연령이 높을수록 급격히 커지므로(85세 이상 집단이 65~74세보다
+# 훨씬 취약) 같은 고령화율이라도 고령층 내부가 더 고령인 지역을 더 위험하게 봐야 한다.
+# 다만 65+/75+/85+ 비율을 직접 가중합하면 75+·85+가 항상 65+보다 작은 누적값이라
+# 점수 스케일 자체가 구조적으로 내려앉는다 — 그래서 곱셈 보정 방식을 쓴다.
+#
+# 보정 강도는 경북 평균 대비 상대 편차이며 ±ELDERLY_SKEW_MAX_ADJ 안에서만 움직인다.
+# 기준선(65+ 비율)이 유지되므로 등급 임계값과 근거 문구 임계값이 그대로 살아있다.
+ELDERLY_SKEW_MAX_ADJ = 0.15
 
 
 # ---------------------------------------------------------------- helpers
@@ -91,7 +101,7 @@ def read_csv(name):
     path = os.path.join(RAW_DIR, name)
     if not os.path.exists(path):
         raise FileNotFoundError(
-            f"{path} 없음. data/raw/에 원본 CSV를 넣거나 seed_sample.py를 먼저 실행하세요."
+            f"{path} 없음. data/raw/에 원본 CSV를 먼저 넣으세요."
         )
     with open(path, encoding="utf-8-sig") as f:
         return list(csv.DictReader(f))
@@ -105,6 +115,8 @@ def load_regions():
     rows = read_csv("regions.csv")
     out = []
     for r in rows:
+        if r["level"] not in ("sigungu", "eupmyeondong"):
+            continue  # 도(道) 전체 대표행 등은 분석 단위가 아니므로 제외 (schema.sql 계약과 일치)
         lat, lon = float(r["lat"]), float(r["lon"])
         nx, ny = latlon_to_kma_grid(lat, lon)
         out.append({
@@ -131,6 +143,8 @@ def load_vulnerability():
             "total_population": total,
             "elderly_65_plus": elderly,
             "elderly_ratio": round(elderly / total, 4) if total else 0.0,
+            "elderly_75_ratio": round(float(r["elderly_75_ratio"]) / 100.0, 4),
+            "elderly_85_ratio": round(float(r["elderly_85_ratio"]) / 100.0, 4),
             "farmer_ratio": float(r["farmer_ratio"]),
             "solitary_elderly": int(r["solitary_elderly"]),
             "base_year": int(r["base_year"]),
@@ -178,12 +192,46 @@ def load_shelters():
     return out
 
 
-def load_heat_illness():
-    """온열질환 발생 이력. 실제로는 질병관리청 온열질환 감시체계."""
+def load_heat_illness(regions):
+    """온열질환 발생 이력. 질병관리청 온열질환 감시데이터(개인 단위 원본,
+    data/raw/heat_illness_gyeongbuk.csv)를 시군구·연도별로 집계한다.
+
+    원본이 시군구 단위까지만 주므로(읍면동 필드 없음) 여기서도 시군구 코드로만
+    집계하고, 읍면동 스코어는 compute_static_scores에서 소속 시군구 값을 상속한다.
+    최근 3년(원본에 존재하는 연도 중 최신 3개)만 사용한다.
+    """
+    rows = read_csv("heat_illness_gyeongbuk.csv")
+    years_present = sorted({r["발생일자"][:4] for r in rows if r["발생일자"]})
+    recent_years = set(years_present[-3:])
+
+    code_by_sigungu = {r["sigungu"]: r["region_code"] for r in regions if r["level"] == "sigungu"}
+
+    counts = {}
+    skipped_no_sigungu = 0
+    unmapped = set()
+    for r in rows:
+        date = r["발생일자"]
+        if not date or date[:4] not in recent_years:
+            continue
+        sgg = r["발생시군구"].strip()
+        if not sgg:
+            skipped_no_sigungu += 1
+            continue
+        code = code_by_sigungu.get(sgg)
+        if code is None:
+            unmapped.add(sgg)
+            continue
+        key = (code, int(date[:4]))
+        counts[key] = counts.get(key, 0) + 1
+
+    if unmapped:
+        print(f"      경고: 시군구명 매핑 실패로 제외됨 - {sorted(unmapped)}")
+    if skipped_no_sigungu:
+        print(f"      발생시군구 미기재로 제외된 행: {skipped_no_sigungu}건")
+
     return [
-        {"region_code": r["region_code"], "year": int(r["year"]),
-         "case_count": int(r["case_count"]), "death_count": int(r["death_count"])}
-        for r in read_csv("heat_illness.csv")
+        {"region_code": code, "year": year, "case_count": n, "death_count": 0}
+        for (code, year), n in sorted(counts.items())
     ]
 
 
@@ -270,37 +318,45 @@ def compute_static_scores(regions, vuln, access, illness):
     # 정규화용 최댓값
     max_cases = max(imap.values()) if imap and max(imap.values()) > 0 else 1
 
+    # 초고령 쏠림 보정의 기준선: 경북 전체 평균 85+/65+ 비중.
+    # 절대값이 아니라 "이 지역이 경북 평균보다 더 늙었는가"라는 상대 비교라서,
+    # 다른 시도 데이터로 교체해도 그 지역 평균에 맞춰 자동 재조정된다.
+    skews = [v["elderly_85_ratio"] / v["elderly_ratio"]
+             for v in vuln if v.get("elderly_ratio") and v.get("elderly_85_ratio") is not None]
+    skew_baseline = sum(skews) / len(skews) if skews else 0.0
+
     out = []
     for reg in regions:
         code = reg["region_code"]
         v = vmap.get(code, {})
         a = amap.get(code, {})
 
-        # 고령인구 점수: 고령화율(0~100) 그대로 사용
-        es = (v.get("elderly_ratio") or 0.0) * 100.0
-
-        # 농업인 점수: 농업인 비율(0~100)
-        fs = (v.get("farmer_ratio") or 0.0) * 100.0
+        # 고령인구 점수: 65세 이상 비율을 기준선으로, 초고령(85+) 쏠림만큼 ±보정
+        e65 = v.get("elderly_ratio") or 0.0
+        e85 = v.get("elderly_85_ratio") or 0.0
+        skew = (e85 / e65) if e65 else skew_baseline
+        # 경북 평균 대비 상대 편차. ±100%로 잘라 이상치 한 곳이 점수를 뒤집지 않게 한다.
+        rel = max(-1.0, min(1.0, (skew - skew_baseline) / skew_baseline)) if skew_baseline else 0.0
+        es = min(100.0, e65 * 100.0 * (1 + ELDERLY_SKEW_MAX_ADJ * rel))
 
         # 쉼터 점수: 최근접 거리가 멀수록, 도보권 쉼터가 적을수록 높음
         dist = a.get("nearest_distance_m") or 2000.0
         w400 = a.get("within_400m_count") or 0
         ss = min(100.0, (dist / 2000.0) * 70.0 + (30.0 if w400 == 0 else 0.0))
 
-        # 과거 이력 점수
-        cases = imap.get(code, 0)
+        # 과거 이력 점수. 원본이 시군구 단위까지만 있어 읍면동은 소속 시군구 값을 상속.
+        cases = imap.get(code)
+        if cases is None:
+            cases = imap.get(code[:5] + "00000", 0)
         hs = (cases / max_cases) * 100.0
 
-        # 가중합
         total = (es * WEIGHTS["elderly"]
-                 + fs * WEIGHTS["farmer"]
                  + ss * WEIGHTS["shelter"]
                  + hs * WEIGHTS["history"])
 
         out.append({
             "region_code": code,
             "elderly_score": round(es, 2),
-            "farmer_score": round(fs, 2),
             "shelter_score": round(ss, 2),
             "history_score": round(hs, 2),
             "static_total": round(total, 2),
@@ -325,7 +381,8 @@ def write_db(regions, vuln, access, illness, scores, coverage, shelters, weather
         ":level,:lat,:lon,:kma_nx,:kma_ny)", regions)
     conn.executemany(
         "INSERT INTO vulnerability VALUES (:region_code,:total_population,"
-        ":elderly_65_plus,:elderly_ratio,:farmer_ratio,:solitary_elderly,:base_year)", vuln)
+        ":elderly_65_plus,:elderly_ratio,:elderly_75_ratio,:elderly_85_ratio,"
+        ":farmer_ratio,:solitary_elderly,:base_year)", vuln)
     conn.executemany(
         "INSERT INTO shelter_access VALUES (:region_code,:shelter_count,"
         ":within_400m_count,:nearest_distance_m,:is_blind_spot,:updated_at)", access)
@@ -334,7 +391,7 @@ def write_db(regions, vuln, access, illness, scores, coverage, shelters, weather
         ":case_count,:death_count)", illness)
     conn.executemany(
         "INSERT INTO static_risk_scores VALUES (:region_code,:elderly_score,"
-        ":farmer_score,:shelter_score,:history_score,:static_total,:computed_at)", scores)
+        ":shelter_score,:history_score,:static_total,:computed_at)", scores)
 
     cov_rows = []
     for c in coverage:
@@ -384,7 +441,7 @@ def main():
     print(f"      기상 실측 {len(weather)}개 지역 매핑 완료")
 
     print("[5/6] 정적 위험도 스코어 계산")
-    illness = load_heat_illness()
+    illness = load_heat_illness(regions)
     scores = compute_static_scores(regions, vuln, access, illness)
 
     print("[6/6] DB 저장")

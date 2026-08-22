@@ -1,7 +1,0 @@
-pandas
-pyproj
-requests
-python-dotenv
-mcp
-defusedxml
-openpyxl

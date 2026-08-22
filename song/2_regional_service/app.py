@@ -64,7 +64,7 @@ def api_regions():
     rows = db(f"""
         SELECT r.region_code, r.sigungu, r.eupmyeondong, r.level,
                r.lat, r.lon, r.kma_nx, r.kma_ny,
-               s.static_total, s.elderly_score, s.farmer_score,
+               s.static_total, s.elderly_score,
                s.shelter_score, s.history_score,
                sa.shelter_count, sa.within_400m_count,
                sa.nearest_distance_m, sa.is_blind_spot,
@@ -106,8 +106,6 @@ def api_regions():
             reasons.append(f"체감온도 {feels:.1f}°C (기온 {r.get('temperature')}°C, 습도 {r.get('humidity')}%), {lv} 단계")
         if (r.get("elderly_score") or 0) >= 60:
             reasons.append(f"고령인구 비율 {(r.get('elderly_ratio') or 0)*100:.1f}%로 높음")
-        if (r.get("farmer_score") or 0) >= 60:
-            reasons.append(f"농업인 비율 {(r.get('farmer_ratio') or 0)*100:.1f}%로 야외노출 많음")
         if r.get("is_blind_spot"):
             reasons.append(f"도보 5분권 쉼터 없음 (최근접 {r.get('nearest_distance_m') or 0:.0f}m)")
         if (r.get("history_score") or 0) >= 60:

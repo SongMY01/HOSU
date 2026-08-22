@@ -1,8 +1,16 @@
 {
+  "_comment": [
+    "Claude Desktop 등 MCP 클라이언트 설정 예시입니다.",
+    "args의 경로를 클론한 위치의 '절대경로'로 바꿔주세요 —",
+    "MCP 클라이언트는 임의의 작업 디렉토리에서 서버를 실행하므로 상대경로는 동작하지 않습니다.",
+    "KMA_API_KEY는 비워둬도 됩니다(포함된 실측 CSV로 동작). 설정 파일 위치는 상위 README 참고."
+  ],
   "mcpServers": {
     "hosu-heat-risk": {
-      "command": "python",
-      "args": ["1_data_infrastructure/mcp_server/server.py"],
+      "command": "python3",
+      "args": [
+        "/절대/경로/JHosu/song/1_data_infrastructure/mcp_server/server.py"
+      ],
       "env": {
         "KMA_API_KEY": ""
       }

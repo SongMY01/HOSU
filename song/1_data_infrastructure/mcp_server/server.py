@@ -131,8 +131,6 @@ def get_heat_risk_score(region: str) -> dict:
         reasons.append(f"체감온도 {feels_like}°C (기온 {temp}°C, 습도 {hum}%), {level} 단계")
     if s["elderly_score"] >= 60:
         reasons.append(f"고령인구 비율 {v.get('elderly_ratio', 0) * 100:.1f}%로 높음")
-    if s["farmer_score"] >= 60:
-        reasons.append(f"농업인 비율 {v.get('farmer_ratio', 0) * 100:.1f}%로 야외노출 많음")
     if acc.get("is_blind_spot"):
         reasons.append(f"도보 5분권 무더위쉼터 없음 (최근접 {acc.get('nearest_distance_m', 0):.0f}m)")
     if s["history_score"] >= 60:
@@ -152,7 +150,7 @@ def get_heat_risk_score(region: str) -> dict:
             "announce_time": w.get("announce_time", "")
         },
         "static_breakdown": {
-            "elderly": s["elderly_score"], "farmer": s["farmer_score"],
+            "elderly": s["elderly_score"],
             "shelter": s["shelter_score"], "history": s["history_score"],
         },
         "reasons": reasons or ["특이 위험 요소 없음"],
@@ -270,6 +268,8 @@ def get_vulnerable_population(region: str) -> dict:
         "total_population": v["total_population"],
         "elderly_65_plus": v["elderly_65_plus"],
         "elderly_ratio_pct": round(v["elderly_ratio"] * 100, 1),
+        "elderly_75_ratio_pct": round(v["elderly_75_ratio"] * 100, 1),
+        "elderly_85_ratio_pct": round(v["elderly_85_ratio"] * 100, 1),
         "farmer_ratio_pct": round(v["farmer_ratio"] * 100, 1),
         "solitary_elderly": v["solitary_elderly"],
         "base_year": v["base_year"],

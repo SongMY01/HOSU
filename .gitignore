@@ -1,5 +1,10 @@
 .env
+.env.*
+# 키 없는 템플릿은 배포에 필요하므로 예외
+!.env.example
+
 __pycache__/
 *.db
 venv/
 prototype_map.html
+.DS_Store

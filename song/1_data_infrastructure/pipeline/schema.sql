@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS vulnerability (
     region_code       TEXT PRIMARY KEY REFERENCES regions(region_code),
     total_population  INTEGER,
     elderly_65_plus   INTEGER,            -- 65세 이상 인구
-    elderly_ratio     REAL,               -- 0.0 ~ 1.0
+    elderly_ratio     REAL,               -- 65세 이상 비율, 0.0 ~ 1.0
+    elderly_75_ratio  REAL,               -- 75세 이상 비율(누적), 0.0 ~ 1.0
+    elderly_85_ratio  REAL,               -- 85세 이상 비율(누적), 0.0 ~ 1.0
     farmer_ratio      REAL,               -- 농업인 비율 0.0 ~ 1.0
     solitary_elderly  INTEGER,            -- 독거노인 수 (집계값, 개인정보 아님)
     base_year         INTEGER             -- 통계 기준연도
@@ -48,7 +50,6 @@ CREATE TABLE IF NOT EXISTS heat_illness_history (
 CREATE TABLE IF NOT EXISTS static_risk_scores (
     region_code        TEXT PRIMARY KEY REFERENCES regions(region_code),
     elderly_score      REAL,              -- 0~100 정규화
-    farmer_score       REAL,
     shelter_score      REAL,              -- 접근성 나쁠수록 높음
     history_score      REAL,
     static_total       REAL,              -- 가중합 (실시간 기온 제외한 기저 위험도)
