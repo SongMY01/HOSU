@@ -12,11 +12,16 @@ KMA_API_KEY 환경변수가 있으면 기상청 단기예보 실황 API를 호�
 import csv
 import os
 from datetime import datetime, timedelta
+from urllib.parse import unquote
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEATHER_CSV_PATH = os.path.join(BASE_DIR, "data", "raw", "gyeongbuk_weather.csv")
 
-KMA_API_KEY = os.environ.get("KMA_API_KEY")
+_raw_kma_key = os.environ.get("KMA_API_KEY") or os.environ.get("DATA_GO_KR_SERVICE_KEY", "")
+KMA_API_KEY = unquote(_raw_kma_key) if _raw_kma_key else None
 KMA_URL = ("https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst")
 
 LEVEL_SCORE = {"관심": 20.0, "주의": 50.0, "경고": 75.0, "위험": 100.0}
