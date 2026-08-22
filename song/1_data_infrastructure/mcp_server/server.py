@@ -13,15 +13,19 @@ import math
 import os
 import sqlite3
 from datetime import datetime
-
 try:                                            # MCP SDK 2.x
     from mcp.server.mcpserver import MCPServer as _Server
 except ImportError:                             # MCP SDK 1.x
     from mcp.server.fastmcp import FastMCP as _Server
 
+import sys
+_SERVER_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SERVER_DIR not in sys.path:
+    sys.path.insert(0, _SERVER_DIR)
+
 from weather import get_feels_like, get_weather_details, temp_to_level, LEVEL_SCORE
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(_SERVER_DIR)
 DB_PATH = os.path.join(BASE_DIR, "data", "hosu.db")
 
 # 최종 위험도 = 정적 기저 위험도 * (1 - a) + 실시간 기온 위험도 * a

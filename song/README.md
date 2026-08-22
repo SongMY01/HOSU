@@ -14,44 +14,67 @@ MCP 서버 형태로 공개하는 오픈 데이터 인프라입니다.
 HOSU는 흩어진 공공데이터를 하나의 좌표계·행정코드 기준으로 묶어
 그 판단 근거를 제공합니다.
 
+## 프로젝트 레이어 구조
+
+본 프로젝트는 **JunctionX Korea 2026 해커톤 트랙**의 두 가지 핵심 축을 명확히 분리하여 구현했습니다.
+
+```
+song/
+├── 1_data_infrastructure/        # [Layer 1] 공공데이터 정규화 & MCP 서버 인프라
+│   ├── pipeline/                 # 데이터 정규화 및 스코어링 배치 (build.py)
+│   ├── mcp_server/               # AI 연동 표준 FastMCP 서버 (server.py)
+│   └── data/                     # 정규화 SQLite DB (hosu.db) 및 원천 CSV (6종)
+│
+└── 2_regional_service/           # [Layer 2] 경북 폭염TF 현안 해결 서비스
+    ├── app.py                    # 대시보드 백엔드 서버
+    └── static/index.html         # 인터랙티브 지도 & 사각지대 시각화 UI
+```
+
+---
+
 ## 빠른 시작 (5분)
 
 ```bash
-git clone <repo-url> && cd hosu
+cd song
 pip install -r requirements.txt
 
-python pipeline/seed_sample.py   # 샘플 원본 데이터 생성 (실데이터 있으면 생략)
-python pipeline/build.py         # 정규화 + 스코어링 -> data/hosu.db
-python mcp_server/smoke_test.py  # Tool 동작 확인
+# 1. [Layer 1] 데이터 파이프라인 빌드 및 MCP 서버 검증
+python 1_data_infrastructure/pipeline/build.py         # 정규화 + 스코어링 -> data/hosu.db
+python 1_data_infrastructure/mcp_server/smoke_test.py  # MCP Tool 동작 검증
+python 1_data_infrastructure/mcp_server/server.py      # MCP 서버 실행
+
+# 2. [Layer 2] 현안 해결 웹 대시보드 실행
+python 2_regional_service/app.py                       # http://localhost:5050 접속
 ```
 
-Claude Desktop 등 MCP 클라이언트에 연결하려면 `mcp.json` 참고.
+Claude Desktop 등 MCP 클라이언트에 연결하려면 `1_data_infrastructure/mcp_server/mcp.json` 참고.
+
+---
 
 ## 아키텍처
 
 ```
-공공데이터 (기상청 / 질병관리청 / 공공데이터포털 / 통계청)
+[ 공공데이터 소스 ]
+  기상청(초단기실황) / 통계청(인구) / 행안부(쉼터) / 질병관리청(온열질환)
         │
         ▼
-[배치 파이프라인]  pipeline/build.py       ← 정기 실행 (하루 1회)
-   좌표계 통일 (위경도 → 기상청 격자)
-   행정표준코드 기준 결합
-   정적 위험도 스코어 사전 계산
+========================================================================
+[ Layer 1: Data Infrastructure ]  (1_data_infrastructure/)
+  ├── pipeline/build.py  ← 좌표계 통일(위경도→격자), 행정코드 결합, 스코어링
+  ├── data/hosu.db       ← 정규화된 읽기 전용 저장소
+  └── mcp_server/        ← FastMCP 기반 AI 표준 Tool 노출 (server.py)
+========================================================================
         │
-        ▼
-[SQLite]  data/hosu.db                      ← 읽기 전용 저장소
-        │
-        ▼
-[MCP 서버]  mcp_server/server.py            ← 요청 시마다 조회
-   DB 조회 + 기상청 실시간 체감온도만 결합
-        │
-        ▼
-AI 클라이언트 / TF 대시보드
+        ├───────────────────────────────────┐
+        ▼                                   ▼
+[ AI 클라이언트 / LLM 에이전트 ]    [ Layer 2: Regional Service ]
+  Claude Desktop, LangChain 등       (2_regional_service/app.py)
+  (자연어 기반 위험도/사각지대 질의)    (경북 폭염TF 상황판 & 현장 대응 UI)
 ```
 
 핵심은 **무거운 가공은 파이프라인이 미리, 서버는 조회만** 한다는 분리입니다.
 
-## 제공 Tool
+## 제공 Tool (Layer 1 MCP Server)
 
 | Tool | 설명 |
 |---|---|

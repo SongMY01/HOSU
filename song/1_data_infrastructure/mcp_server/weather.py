@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEATHER_CSV_PATH = os.path.join(BASE_DIR, "data", "raw", "gyeongbuk_weather.csv")
 
 _raw_kma_key = os.environ.get("KMA_API_KEY") or os.environ.get("DATA_GO_KR_SERVICE_KEY", "")

@@ -8,23 +8,30 @@ HOSU TF 대시보드 서버
 """
 
 import os
+import sys
 import sqlite3
 from datetime import datetime
 
 from flask import Flask, jsonify, send_from_directory, request
-from weather import get_feels_like, temp_to_level, LEVEL_SCORE
-
-app = Flask(__name__, static_folder="static")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "data", "hosu.db")
+ROOT_DIR = os.path.dirname(BASE_DIR)
+INFRA_DIR = os.path.join(ROOT_DIR, "1_data_infrastructure")
+
+# mcp_server 모듈(weather) 참조
+sys.path.insert(0, os.path.join(INFRA_DIR, "mcp_server"))
+from weather import get_feels_like, temp_to_level, LEVEL_SCORE
+
+app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"))
+
+DB_PATH = os.path.join(INFRA_DIR, "data", "hosu.db")
 REALTIME_WEIGHT = 0.4
 
 
 def db(sql, params=()):
     """SQLite read-only 조회."""
     if not os.path.exists(DB_PATH):
-        raise RuntimeError("data/hosu.db 없음. `python3 build.py` 를 먼저 실행하세요.")
+        raise RuntimeError(f"{DB_PATH} 없음. `python 1_data_infrastructure/pipeline/build.py` 를 먼저 실행하세요.")
     conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
@@ -42,7 +49,7 @@ def region_label(r):
 
 @app.route("/")
 def index():
-    return send_from_directory("static", "index.html")
+    return send_from_directory(os.path.join(BASE_DIR, "static"), "index.html")
 
 
 @app.route("/api/regions")
@@ -169,7 +176,7 @@ def api_shelters():
 
 if __name__ == "__main__":
     if not os.path.exists(DB_PATH):
-        print(f"⚠  {DB_PATH} 없음. 먼저 `python3 build.py`를 실행하세요.")
+        print(f"⚠  {DB_PATH} 없음. 먼저 `python 1_data_infrastructure/pipeline/build.py`를 실행하세요.")
         exit(1)
     print("🔥 HOSU 대시보드: http://localhost:5050")
     app.run(debug=True, port=5050, host="0.0.0.0")

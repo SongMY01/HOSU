@@ -15,10 +15,10 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "hosu.db")
 RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
-SCHEMA_PATH = os.path.join(BASE_DIR, "schema.sql")
+SCHEMA_PATH = os.path.join(BASE_DIR, "pipeline", "schema.sql")
 
 WALK_5MIN_METERS = 400  # 도보 5분 기준 (국립재난안전연구원 분석 기준 차용)
 
@@ -200,7 +200,11 @@ def load_channel_coverage():
 
 
 def load_weather(regions):
-    """gyeongbuk_weather.csv 기상 실측 데이터 로드 및 345개 지역 매핑."""
+    """gyeongbuk_weather.csv 기상 실측 데이터 로드 및 지역 매핑."""
+    import sys
+    _MCP_SERVER_DIR = os.path.join(BASE_DIR, "mcp_server")
+    if _MCP_SERVER_DIR not in sys.path:
+        sys.path.insert(0, _MCP_SERVER_DIR)
     from weather import get_weather_details
 
     weather_rows = []

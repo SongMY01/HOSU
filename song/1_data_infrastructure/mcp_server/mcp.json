@@ -2,7 +2,7 @@
   "mcpServers": {
     "hosu-heat-risk": {
       "command": "python",
-      "args": ["mcp_server/server.py"],
+      "args": ["1_data_infrastructure/mcp_server/server.py"],
       "env": {
         "KMA_API_KEY": ""
       }
