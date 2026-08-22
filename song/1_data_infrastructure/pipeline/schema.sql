@@ -22,8 +22,6 @@ CREATE TABLE IF NOT EXISTS vulnerability (
     elderly_ratio     REAL,               -- 65세 이상 비율, 0.0 ~ 1.0
     elderly_75_ratio  REAL,               -- 75세 이상 비율(누적), 0.0 ~ 1.0
     elderly_85_ratio  REAL,               -- 85세 이상 비율(누적), 0.0 ~ 1.0
-    farmer_ratio      REAL,               -- 농업인 비율 0.0 ~ 1.0
-    solitary_elderly  INTEGER,            -- 독거노인 수 (집계값, 개인정보 아님)
     base_year         INTEGER             -- 통계 기준연도
 );
 

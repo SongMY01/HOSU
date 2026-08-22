@@ -106,7 +106,7 @@ MCP 클라이언트는 임의의 작업 디렉토리에서 서버를 실행하�
 | `get_shelter_coverage(region)` | 무더위쉼터 도보권(400m) 접근성, 사각지대 여부 |
 | `get_nearby_shelters(region, radius_m, limit)` | 반경 내 쉼터를 거리순으로 — 냉방기기·야간운영·카카오맵 링크 포함 |
 | `search_shelters(keyword, sigungu, limit)` | 쉼터명·주소 키워드 검색 |
-| `get_vulnerable_population(region)` | 고령(65+/75+/85+)·독거노인·농업인 집계 지표 |
+| `get_vulnerable_population(region)` | 고령인구(65+/75+/85+ 초고령) 연령대별 집계 지표 |
 
 ### 응답 예시
 

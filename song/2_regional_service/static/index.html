@@ -732,8 +732,8 @@
                 <div class="d-sec-title">👥 취약인구</div>
                 <div class="d-row"><span class="d-row-l">총 인구</span><span class="d-row-v">${(r.total_population??0).toLocaleString()}명</span></div>
                 <div class="d-row"><span class="d-row-l">65세 이상</span><span class="d-row-v">${(r.elderly_65_plus??0).toLocaleString()}명 (${((r.elderly_ratio??0)*100).toFixed(1)}%)</span></div>
-                <div class="d-row"><span class="d-row-l">농업인 비율</span><span class="d-row-v">${((r.farmer_ratio??0)*100).toFixed(1)}%</span></div>
-                <div class="d-row"><span class="d-row-l">독거노인</span><span class="d-row-v">${(r.solitary_elderly??0).toLocaleString()}명</span></div>
+                <div class="d-row"><span class="d-row-l">75세 이상</span><span class="d-row-v">${((r.elderly_75_ratio??0)*100).toFixed(1)}%</span></div>
+                <div class="d-row"><span class="d-row-l">85세 이상 (초고령)</span><span class="d-row-v">${((r.elderly_85_ratio??0)*100).toFixed(1)}%</span></div>
             </div>
 
             ${r.reasons&&r.reasons.length?`

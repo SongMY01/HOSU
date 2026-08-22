@@ -145,8 +145,6 @@ def load_vulnerability():
             "elderly_ratio": round(elderly / total, 4) if total else 0.0,
             "elderly_75_ratio": round(float(r["elderly_75_ratio"]) / 100.0, 4),
             "elderly_85_ratio": round(float(r["elderly_85_ratio"]) / 100.0, 4),
-            "farmer_ratio": float(r["farmer_ratio"]),
-            "solitary_elderly": int(r["solitary_elderly"]),
             "base_year": int(r["base_year"]),
         })
     return out
@@ -370,7 +368,7 @@ def write_db(regions, vuln, access, illness, scores, shelters, weather):
     conn.executemany(
         "INSERT INTO vulnerability VALUES (:region_code,:total_population,"
         ":elderly_65_plus,:elderly_ratio,:elderly_75_ratio,:elderly_85_ratio,"
-        ":farmer_ratio,:solitary_elderly,:base_year)", vuln)
+        ":base_year)", vuln)
     conn.executemany(
         "INSERT INTO shelter_access VALUES (:region_code,:shelter_count,"
         ":within_400m_count,:nearest_distance_m,:is_blind_spot,:updated_at)", access)

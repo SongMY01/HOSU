@@ -21,7 +21,7 @@
     ├── hosu.db               # 읽기 전용 정규화 SQLite DB
     └── raw/                  # 원천 공공데이터 CSV (5종)
         ├── regions.csv       # 경북 행정구역(시군구 24 + 읍면동 392) 좌표 및 기상청 격자 매핑
-        ├── population.csv    # 읍면동 취약인구 (고령·농업인·독거노인)
+        ├── population.csv    # 읍면동 연령별 인구통계 (65+/75+/85+ 초고령 통계)
         ├── shelters.csv      # 무더위쉼터 5,605개소 시설 및 위치 정보
         ├── heat_illness_gyeongbuk.csv # 온열질환 감시 데이터(질병관리청, 개인 단위 원본)
         └── gyeongbuk_weather.csv # 기상청 실시간/실측 기상 데이터
@@ -62,4 +62,4 @@ python 1_data_infrastructure/mcp_server/server.py
 | `get_shelter_coverage(region)` | 해당 지역의 무더위쉼터 도보권(400m) 접근성 및 사각지대 판정 | 도보 5분 내 쉼터 유무, 최근접 거리(m) |
 | `get_nearby_shelters(region, radius_m, limit)` | 반경 내 실제 쉼터를 거리순 조회 | 쉼터명·주소·도보 소요시간·수용인원·냉방기기 대수·야간/휴일 운영·카카오맵 링크 |
 | `search_shelters(keyword, sigungu, limit)` | 쉼터명 또는 주소 키워드 검색 | 위와 동일한 쉼터 상세 정보 |
-| `get_vulnerable_population(region)` | 고령인구·독거노인 등 취약계층 집계 | 총인구, 65세+/75세+/85세+ 비율, 독거노인 수, 농업인 비율 |
+| `get_vulnerable_population(region)` | 고령인구 연령대별 집계 지표 | 총인구, 65세+/75세+/85세+ 인구 및 비율 |

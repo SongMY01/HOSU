@@ -270,8 +270,6 @@ def get_vulnerable_population(region: str) -> dict:
         "elderly_ratio_pct": round(v["elderly_ratio"] * 100, 1),
         "elderly_75_ratio_pct": round(v["elderly_75_ratio"] * 100, 1),
         "elderly_85_ratio_pct": round(v["elderly_85_ratio"] * 100, 1),
-        "farmer_ratio_pct": round(v["farmer_ratio"] * 100, 1),
-        "solitary_elderly": v["solitary_elderly"],
         "base_year": v["base_year"],
     }
 

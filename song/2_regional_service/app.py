@@ -69,7 +69,7 @@ def api_regions():
                sa.shelter_count, sa.within_400m_count,
                sa.nearest_distance_m, sa.is_blind_spot,
                v.total_population, v.elderly_65_plus, v.elderly_ratio,
-               v.farmer_ratio, v.solitary_elderly,
+               v.elderly_75_ratio, v.elderly_85_ratio,
                w.temperature, w.humidity, w.feels_like, w.risk_tier, w.announce_time
         FROM regions r
         LEFT JOIN static_risk_scores s  ON r.region_code = s.region_code
