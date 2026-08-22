@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HOSU — 경북 폭염 위험도 대시보드</title>
+    <meta name="description" content="경상북도 폭염 위험도 실시간 모니터링 및 사각지대 표시 TF 대시보드">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        /* ================ VARIABLES ================ */
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: rgba(17, 24, 39, 0.8);
+            --bg-glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.08);
+            --text-1: #f3f4f6;
+            --text-2: #9ca3af;
+            --text-3: #6b7280;
+            --accent: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.3);
+            --risk-low: #10b981;
+            --risk-mid: #f59e0b;
+            --risk-high: #f97316;
+            --risk-crit: #ef4444;
+            --blind: #a855f7;
+            --uncov: #ec4899;
+            --header-h: 64px;
+            --sidebar-w: 340px;
+            --detail-w: 400px;
+            --radius: 12px;
+            --tr: all .3s cubic-bezier(.4,0,.2,1);
+        }
+
+        /* ================ RESET ================ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-1);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* ================ SCROLLBAR ================ */
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); }
+
+        /* ================ HEADER ================ */
+        .header {
+            position: fixed; top: 0; left: 0; right: 0;
+            height: var(--header-h);
+            background: linear-gradient(135deg, rgba(17,24,39,.96), rgba(30,41,59,.96));
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 24px; z-index: 1000;
+        }
+        .header-left { display: flex; align-items: center; gap: 14px; }
+        .logo {
+            font-size: 22px; font-weight: 800;
+            background: linear-gradient(135deg, #f97316, #ef4444);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            letter-spacing: -.5px;
+        }
+        .header-sub { font-size: 13px; color: var(--text-2); }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+
+        .level-toggle {
+            display: flex;
+            background: rgba(255,255,255,.05);
+            border-radius: 8px; overflow: hidden;
+            border: 1px solid var(--border);
+        }
+        .level-btn {
+            padding: 7px 14px; font-size: 12px; font-weight: 600;
+            color: var(--text-2); background: transparent;
+            border: none; cursor: pointer; transition: var(--tr);
+            font-family: inherit;
+        }
+        .level-btn.active { background: var(--accent); color: #fff; }
+        .level-btn:hover:not(.active) { background: rgba(255,255,255,.07); }
+
+        .shelter-toggle-btn {
+            display: flex; align-items: center; gap: 6px;
+            padding: 7px 14px; font-size: 12px; font-weight: 600;
+            color: var(--text-2); background: rgba(255,255,255,.05);
+            border: 1px solid var(--border); border-radius: 8px;
+            cursor: pointer; transition: var(--tr); font-family: inherit;
+        }
+        .shelter-toggle-btn:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.18); color: var(--text-1); }
+        .shelter-toggle-btn.active {
+            background: rgba(16, 185, 129, 0.15);
+            border-color: rgba(16, 185, 129, 0.4);
+            color: #34d399;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+        }
+
+        .search-box { position: relative; }
+        .search-input {
+            padding: 7px 14px 7px 34px;
+            background: rgba(255,255,255,.05);
+            border: 1px solid var(--border);
+            border-radius: 8px; color: var(--text-1);
+            font-size: 12px; width: 180px; outline: none;
+            transition: var(--tr); font-family: inherit;
+        }
+        .search-input::placeholder { color: var(--text-3); }
+        .search-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); width: 240px; }
+        .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--text-3); }
+
+        .ts { font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+        .live-dot {
+            width: 7px; height: 7px; background: var(--risk-low);
+            border-radius: 50%; animation: live 2s infinite;
+        }
+        @keyframes live { 0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)} }
+
+        /* ================ LAYOUT ================ */
+        .main { display: flex; height: calc(100vh - var(--header-h)); margin-top: var(--header-h); }
+
+        /* ================ SIDEBAR ================ */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: linear-gradient(180deg, rgba(17,24,39,.96), rgba(10,14,26,.98));
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border);
+            overflow-y: auto; padding: 20px;
+            display: flex; flex-direction: column; gap: 20px; z-index: 100;
+        }
+        .sec-title {
+            font-size: 10px; font-weight: 700; color: var(--text-3);
+            text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;
+            display: flex; align-items: center; gap: 8px;
+        }
+
+        /* ================ STAT CARDS ================ */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .stat-card {
+            background: var(--bg-glass); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: 14px;
+            transition: var(--tr); position: relative; overflow: hidden;
+        }
+        .stat-card::before {
+            content:''; position: absolute; top:0; left:0; right:0; height: 2px;
+            background: linear-gradient(90deg,transparent,var(--accent),transparent);
+            opacity: 0; transition: var(--tr);
+        }
+        .stat-card:hover { border-color: rgba(255,255,255,.14); transform: translateY(-2px); }
+        .stat-card:hover::before { opacity: 1; }
+        .stat-card.alert { border-color: rgba(239,68,68,.25); }
+        .stat-card.alert::before { background: linear-gradient(90deg,transparent,var(--risk-crit),transparent); opacity:1; }
+        .stat-val { font-size: 26px; font-weight: 800; line-height: 1; margin-bottom: 3px; }
+        .stat-lbl { font-size: 10px; color: var(--text-3); font-weight: 500; }
+        .stat-card.wide { grid-column: span 2; }
+
+        /* ================ PRIORITY LIST ================ */
+        .prio-list { display: flex; flex-direction: column; gap: 3px; }
+        .ri {
+            display: flex; align-items: center; gap: 10px;
+            padding: 9px 10px; background: var(--bg-glass);
+            border: 1px solid transparent; border-radius: 8px;
+            cursor: pointer; transition: var(--tr);
+        }
+        .ri:hover { background: rgba(255,255,255,.05); border-color: var(--border); transform: translateX(3px); }
+        .ri.active { background: rgba(59,130,246,.08); border-color: rgba(59,130,246,.25); }
+        .ri-rank {
+            width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+            font-size: 10px; font-weight: 700; border-radius: 6px;
+            background: rgba(255,255,255,.05); color: var(--text-3); flex-shrink: 0;
+        }
+        .ri-rank.top { background: linear-gradient(135deg,var(--risk-high),var(--risk-crit)); color: #fff; }
+        .ri-info { flex: 1; min-width: 0; }
+        .ri-name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ri-sub { font-size: 10px; color: var(--text-3); display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+        .ri-score { font-size: 15px; font-weight: 700; flex-shrink: 0; }
+
+        /* ================ BADGES & TAGS ================ */
+        .badge {
+            display: inline-flex; align-items: center;
+            padding: 2px 7px; border-radius: 4px;
+            font-size: 9px; font-weight: 700; letter-spacing: .3px;
+        }
+        .badge.low    { background: rgba(16,185,129,.12); color: var(--risk-low); }
+        .badge.mid    { background: rgba(245,158,11,.12); color: var(--risk-mid); }
+        .badge.high   { background: rgba(249,115,22,.12); color: var(--risk-high); }
+        .badge.crit   { background: rgba(239,68,68,.12); color: var(--risk-crit); }
+        .tag {
+            display: inline-flex; align-items: center; gap: 3px;
+            padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: 600;
+        }
+        .tag.blind  { background: rgba(168,85,247,.12); color: var(--blind); }
+        .tag.uncov  { background: rgba(236,72,153,.12); color: var(--uncov); }
+
+        /* ================ MAP ================ */
+        .map-wrap { flex: 1; position: relative; }
+        #map { width: 100%; height: 100%; }
+        .leaflet-container { background: var(--bg-primary) !important; }
+
+        /* pulse animation for blind spot markers (SVG) */
+        .pulse-marker { animation: mPulse 2s ease-in-out infinite; }
+        @keyframes mPulse { 0%,100%{stroke-opacity:.55}50%{stroke-opacity:.12;stroke-width:6} }
+
+        /* ================ LEGEND ================ */
+        .legend {
+            position: absolute; bottom: 24px; left: 24px;
+            background: rgba(17,24,39,.92); backdrop-filter: blur(16px);
+            border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 14px 16px; z-index: 500; min-width: 170px;
+        }
+        .legend-title { font-size: 10px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .legend-item { display: flex; align-items: center; gap: 9px; padding: 3px 0; font-size: 11px; color: var(--text-2); }
+        .ld { width: 13px; height: 13px; border-radius: 50%; flex-shrink: 0; border: 2px solid rgba(255,255,255,.08); }
+        .ld.blind-s { background: transparent; border: 2px dashed var(--blind); }
+        .ld.uncov-s { background: transparent; border: 2px solid var(--uncov); animation: ldPulse 2s infinite; }
+        @keyframes ldPulse { 0%,100%{box-shadow:0 0 0 0 rgba(236,72,153,.35)}50%{box-shadow:0 0 0 4px rgba(236,72,153,0)} }
+        .legend-div { height: 1px; background: var(--border); margin: 7px 0; }
+
+        /* ================ DETAIL PANEL ================ */
+        .detail {
+            position: fixed; top: var(--header-h); right: 0; bottom: 0;
+            width: var(--detail-w);
+            background: linear-gradient(180deg, rgba(17,24,39,.98), rgba(10,14,26,.99));
+            backdrop-filter: blur(20px); border-left: 1px solid var(--border);
+            transform: translateX(100%);
+            transition: transform .4s cubic-bezier(.4,0,.2,1);
+            z-index: 900; overflow-y: auto; padding: 24px;
+        }
+        .detail.open { transform: translateX(0); }
+        .d-close {
+            display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3);
+            background: none; border: none; cursor: pointer; padding: 4px 0; margin-bottom: 18px;
+            font-family: inherit; transition: var(--tr);
+        }
+        .d-close:hover { color: var(--text-1); }
+        .d-name { font-size: 22px; font-weight: 800; margin-bottom: 3px; letter-spacing: -.5px; }
+        .d-code { font-size: 11px; color: var(--text-3); font-family: monospace; margin-bottom: 18px; }
+        .d-score-card {
+            background: var(--bg-glass); border: 1px solid var(--border);
+            border-radius: 16px; padding: 22px; text-align: center; margin-bottom: 18px;
+            position: relative; overflow: hidden;
+        }
+        .d-score-val { font-size: 44px; font-weight: 800; line-height: 1; margin-bottom: 8px; }
+        .d-sec { margin-bottom: 18px; }
+        .d-sec-title {
+            font-size: 11px; font-weight: 700; color: var(--text-3);
+            text-transform: uppercase; letter-spacing: .8px; margin-bottom: 10px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .d-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,.03); font-size: 12px;
+        }
+        .d-row:last-child { border-bottom: none; }
+        .d-row-l { color: var(--text-2); }
+        .d-row-v { font-weight: 600; }
+        .d-row-v.yes { color: var(--risk-low); }
+        .d-row-v.no  { color: var(--risk-crit); }
+
+        /* breakdown bars */
+        .bd-item { margin-bottom: 10px; }
+        .bd-hdr { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+        .bd-lbl { color: var(--text-2); }
+        .bd-val { font-weight: 600; }
+        .bd-bar { height: 5px; background: rgba(255,255,255,.05); border-radius: 3px; overflow: hidden; }
+        .bd-fill { height: 100%; border-radius: 3px; transition: width .8s cubic-bezier(.4,0,.2,1); }
+
+        /* reasons */
+        .reason {
+            display: flex; align-items: flex-start; gap: 7px;
+            padding: 7px 9px; background: rgba(239,68,68,.04);
+            border: 1px solid rgba(239,68,68,.08); border-radius: 6px;
+            margin-bottom: 5px; font-size: 11px; color: var(--text-2); line-height: 1.4;
+        }
+
+        /* ================ LOADING ================ */
+        .loading {
+            position: fixed; inset: 0; background: var(--bg-primary);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 9999; transition: opacity .5s;
+        }
+        .loading.hide { opacity: 0; pointer-events: none; }
+        .spinner {
+            width: 44px; height: 44px;
+            border: 3px solid rgba(255,255,255,.08); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 14px;
+        }
+        @keyframes spin { to{transform:rotate(360deg)} }
+        .loading-text { font-size: 13px; color: var(--text-3); }
+
+        /* ================ LEAFLET TOOLTIP & POPUP ================ */
+        .leaflet-tooltip {
+            background: rgba(17,24,39,.95) !important;
+            border: 1px solid rgba(255,255,255,.1) !important;
+            color: var(--text-1) !important;
+            border-radius: 8px !important;
+            padding: 10px 14px !important;
+            font-family: 'Inter',sans-serif !important;
+            font-size: 11px !important;
+            box-shadow: 0 8px 32px rgba(0,0,0,.4) !important;
+        }
+        .leaflet-tooltip::before { border-top-color: rgba(17,24,39,.95) !important; }
+        .tt-name { font-weight: 700; font-size: 12px; margin-bottom: 3px; }
+        .tt-score { font-weight: 600; }
+        .tt-tags { margin-top: 4px; display: flex; gap: 4px; flex-wrap: wrap; }
+
+        /* Shelter Leaflet Popup */
+        .leaflet-popup-content-wrapper {
+            background: rgba(17, 24, 39, 0.96) !important;
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(16, 185, 129, 0.3) !important;
+            color: var(--text-1) !important;
+            border-radius: 12px !important;
+            padding: 4px !important;
+            box-shadow: 0 12px 36px rgba(0,0,0,0.6) !important;
+        }
+        .leaflet-popup-tip { background: rgba(17, 24, 39, 0.96) !important; }
+        .leaflet-popup-content { margin: 12px 14px !important; line-height: 1.4 !important; }
+        .sp-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+        .sp-title { font-size: 14px; font-weight: 700; color: #fff; }
+        .sp-type { font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(16,185,129,.15); color: #34d399; font-weight: 600; }
+        .sp-addr { font-size: 11px; color: var(--text-2); margin-bottom: 8px; }
+        .sp-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; background: rgba(255,255,255,.03); padding: 8px; border-radius: 6px; font-size: 11px; margin-bottom: 8px; }
+        .sp-meta-item { display: flex; justify-content: space-between; color: var(--text-2); }
+        .sp-meta-item span:last-child { font-weight: 600; color: var(--text-1); }
+        .sp-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+            width: 100%; padding: 6px 10px; background: var(--accent); color: #fff;
+            font-size: 11px; font-weight: 600; border-radius: 6px; text-decoration: none;
+            transition: var(--tr);
+        }
+        .sp-btn:hover { background: #2563eb; }
+
+        /* Shelter List in Detail */
+        .shelter-list-box {
+            max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+            margin-top: 8px;
+        }
+        .shelter-list-item {
+            padding: 8px 10px; background: rgba(255,255,255,.03); border: 1px solid var(--border);
+            border-radius: 6px; cursor: pointer; transition: var(--tr); font-size: 11px;
+        }
+        .shelter-list-item:hover { background: rgba(16,185,129,.08); border-color: rgba(16,185,129,.3); transform: translateX(2px); }
+        .sli-name { font-weight: 600; color: var(--text-1); display: flex; justify-content: space-between; }
+        .sli-addr { font-size: 10px; color: var(--text-3); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* ================ ANIMATIONS ================ */
+        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)} }
+        .fade-in { animation: fadeUp .4s ease-out forwards; }
+    </style>
+</head>
+<body>
+    <!-- Loading -->
+    <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <div class="loading-text">데이터 로딩 중…</div>
+    </div>
+
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="header-left">
+            <span style="font-size:24px">🔥</span>
+            <div>
+                <div class="logo">HOSU</div>
+                <div class="header-sub">경북 폭염 위험도 대시보드</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <button class="shelter-toggle-btn" id="shelterToggleBtn" onclick="toggleShelters()">
+                <span>🏠</span>
+                <span>쉼터 보기</span>
+            </button>
+            <div class="level-toggle" id="levelToggle">
+                <button class="level-btn active" data-level="sigungu" onclick="setLevel('sigungu')">시군구</button>
+                <button class="level-btn" data-level="eupmyeondong" onclick="setLevel('eupmyeondong')">읍면동</button>
+                <button class="level-btn" data-level="all" onclick="setLevel('all')">전체</button>
+            </div>
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" class="search-input" id="searchInput" placeholder="지역/쉼터 검색…" oninput="onSearch(this.value)">
+            </div>
+            <div class="ts">
+                <span class="live-dot"></span>
+                <span id="tsText">로딩 중…</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="main">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div>
+                <div class="sec-title">📊 현황 요약</div>
+                <div class="stats-grid" id="statsGrid"></div>
+            </div>
+            <div>
+                <div class="sec-title">🏆 우선 대응 지역</div>
+                <div class="prio-list" id="prioList"></div>
+            </div>
+        </aside>
+
+        <!-- Map -->
+        <div class="map-wrap">
+            <div id="map"></div>
+            <div class="legend">
+                <div class="legend-title">위험도 범례</div>
+                <div class="legend-item"><div class="ld" style="background:var(--risk-crit)"></div><span>매우 높음 (≥75)</span></div>
+                <div class="legend-item"><div class="ld" style="background:var(--risk-high)"></div><span>높음 (55–74)</span></div>
+                <div class="legend-item"><div class="ld" style="background:var(--risk-mid)"></div><span>보통 (35–54)</span></div>
+                <div class="legend-item"><div class="ld" style="background:var(--risk-low)"></div><span>낮음 (&lt;35)</span></div>
+                <div class="legend-div"></div>
+                <div class="legend-item"><div class="ld blind-s"></div><span>쉼터 사각지대</span></div>
+                <div class="legend-item"><div class="ld uncov-s"></div><span>채널 미배정</span></div>
+                <div class="legend-div"></div>
+                <div class="legend-item"><div class="ld" style="background:#10b981;box-shadow:0 0 8px rgba(16,185,129,.6)"></div><span>무더위쉼터 (5,605개)</span></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Detail Panel -->
+    <div class="detail" id="detailPanel">
+        <button class="d-close" onclick="closeDetail()">← 닫기</button>
+        <div id="detailContent"></div>
+    </div>
+
+    <!-- Leaflet -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+    /* ============================================================
+       STATE
+       ============================================================ */
+    let map, markerLayer, shelterLayer;
+    let allRegions = [];
+    let allShelters = [];
+    let showShelters = false;
+    let currentLevel = 'sigungu';
+    let selectedCode = null;
+
+    /* ============================================================
+       INIT
+       ============================================================ */
+    async function init() {
+        initMap();
+        await loadData();
+        document.getElementById('loading').classList.add('hide');
+    }
+
+    function initMap() {
+        map = L.map('map', {
+            center: [36.25, 128.8],
+            zoom: 9,
+            zoomControl: false,
+            attributionControl: false,
+        });
+        L.control.zoom({ position: 'topright' }).addTo(map);
+        L.control.attribution({ position: 'bottomright' }).addTo(map);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 18,
+        }).addTo(map);
+
+        markerLayer = L.layerGroup().addTo(map);
+        shelterLayer = L.layerGroup().addTo(map);
+    }
+
+    async function loadData() {
+        try {
+            const [regRes, sumRes] = await Promise.all([
+                fetch('/api/regions?level=' + currentLevel),
+                fetch('/api/summary'),
+            ]);
+            const regData = await regRes.json();
+            const summary = await sumRes.json();
+            allRegions = regData.regions;
+            document.getElementById('tsText').textContent = regData.as_of;
+            renderStats(summary);
+            renderMarkers(allRegions);
+            renderPrioList(allRegions);
+            if (showShelters) {
+                await loadAndRenderShelters();
+            }
+        } catch (e) { console.error('로드 실패:', e); }
+    }
+
+    /* ============================================================
+       SHELTER LAYER & TOGGLE
+       ============================================================ */
+    async function toggleShelters() {
+        showShelters = !showShelters;
+        const btn = document.getElementById('shelterToggleBtn');
+        btn.classList.toggle('active', showShelters);
+
+        if (showShelters) {
+            await loadAndRenderShelters();
+        } else {
+            shelterLayer.clearLayers();
+        }
+    }
+
+    async function loadAndRenderShelters(filterSigungu = null) {
+        shelterLayer.clearLayers();
+        try {
+            let url = '/api/shelters?limit=2000';
+            if (filterSigungu) url += '&sigungu=' + encodeURIComponent(filterSigungu);
+            const res = await fetch(url);
+            const data = await res.json();
+            allShelters = data.shelters;
+            renderShelterMarkers(allShelters);
+        } catch (e) {
+            console.error('쉼터 로드 실패:', e);
+        }
+    }
+
+    function renderShelterMarkers(shelters) {
+        shelterLayer.clearLayers();
+        shelters.forEach(s => {
+            const m = L.circleMarker([s.lat, s.lon], {
+                radius: 5,
+                fillColor: '#10b981',
+                fillOpacity: 0.85,
+                color: '#ffffff',
+                weight: 1.5,
+            });
+
+            // 팝업 내용
+            const popupHtml = `
+                <div class="sp-header">
+                    <div class="sp-title">🏠 ${s.shelter_name}</div>
+                    <span class="sp-type">${s.shelter_type || '쉼터'}</span>
+                </div>
+                <div class="sp-addr">📍 ${s.road_address || s.lot_address || '-'}</div>
+                <div class="sp-meta">
+                    <div class="sp-meta-item"><span>수용인원</span><span>${s.capacity ? s.capacity + '명' : '-'}</span></div>
+                    <div class="sp-meta-item"><span>냉방기기</span><span>에어컨 ${s.aircons}대 / 팬 ${s.fans}대</span></div>
+                    <div class="sp-meta-item"><span>야간운영</span><span>${s.night_open || '-'}</span></div>
+                    <div class="sp-meta-item"><span>휴일운영</span><span>${s.weekend_open || '-'}</span></div>
+                </div>
+                <a href="https://map.kakao.com/link/map/${encodeURIComponent(s.shelter_name)},${s.lat},${s.lon}" target="_blank" class="sp-btn">
+                    🗺️ 카카오맵에서 길찾기
+                </a>
+            `;
+
+            m.bindPopup(popupHtml, { maxWidth: 300 });
+            m.bindTooltip(`🏠 ${s.shelter_name} (${s.sigungu})`, { direction: 'top', offset: [0, -5] });
+            shelterLayer.addLayer(m);
+        });
+    }
+
+    /* ============================================================
+       COLORS / GRADES
+       ============================================================ */
+    function riskColor(s) {
+        if (s >= 75) return '#ef4444';
+        if (s >= 55) return '#f97316';
+        if (s >= 35) return '#f59e0b';
+        return '#10b981';
+    }
+    function riskClass(s) {
+        if (s >= 75) return 'crit';
+        if (s >= 55) return 'high';
+        if (s >= 35) return 'mid';
+        return 'low';
+    }
+    function gradeText(s) {
+        if (s >= 75) return '매우 높음';
+        if (s >= 55) return '높음';
+        if (s >= 35) return '보통';
+        return '낮음';
+    }
+
+    /* ============================================================
+       STATS
+       ============================================================ */
+    function renderStats(s) {
+        document.getElementById('statsGrid').innerHTML = `
+            <div class="stat-card fade-in">
+                <div class="stat-val" style="color:var(--accent)">${s.total_regions}</div>
+                <div class="stat-lbl">전체 지역</div>
+            </div>
+            <div class="stat-card fade-in ${s.high_risk_count?'alert':''}">
+                <div class="stat-val" style="color:var(--risk-crit)">${s.high_risk_count}</div>
+                <div class="stat-lbl">고위험 지역</div>
+            </div>
+            <div class="stat-card fade-in ${s.shelter_blind_spots?'alert':''}">
+                <div class="stat-val" style="color:var(--blind)">${s.shelter_blind_spots}</div>
+                <div class="stat-lbl">쉼터 사각지대</div>
+            </div>
+            <div class="stat-card fade-in ${s.channel_uncovered?'alert':''}">
+                <div class="stat-val" style="color:var(--uncov)">${s.channel_uncovered}</div>
+                <div class="stat-lbl">채널 미배정</div>
+            </div>
+            <div class="stat-card wide fade-in">
+                <div class="stat-val" style="color:${riskColor(s.avg_static_risk)}">${s.avg_static_risk}</div>
+                <div class="stat-lbl">평균 정적 위험도</div>
+            </div>`;
+    }
+
+    /* ============================================================
+       MAP MARKERS (REGIONS)
+       ============================================================ */
+    function renderMarkers(regions) {
+        markerLayer.clearLayers();
+        regions.forEach(r => {
+            const color = riskColor(r.final_risk);
+            const rad = r.level === 'sigungu' ? 14 : 8;
+            const opts = {
+                radius: rad,
+                fillColor: color,
+                fillOpacity: .6,
+                color: 'rgba(255,255,255,.25)',
+                weight: 2,
+            };
+
+            if (r.is_blind_spot) {
+                opts.color = '#a855f7'; opts.weight = 3; opts.dashArray = '5 5';
+            }
+            if (r.is_uncovered) {
+                opts.color = '#ec4899'; opts.weight = 3;
+            }
+            if (r.is_blind_spot && r.is_uncovered) {
+                opts.color = '#ef4444'; opts.weight = 4;
+                opts.dashArray = '5 5'; opts.fillOpacity = .75;
+            }
+
+            const m = L.circleMarker([r.lat, r.lon], opts);
+
+            let tags = '';
+            if (r.is_blind_spot) tags += '<span class="tag blind">🏠 쉼터 사각</span>';
+            if (r.is_uncovered) tags += '<span class="tag uncov">📡 미배정</span>';
+
+            m.bindTooltip(`
+                <div class="tt-name">${r.region_name}</div>
+                <div class="tt-score" style="color:${color}">위험도 ${r.final_risk} · ${r.risk_grade}</div>
+                <div style="font-size:10px;color:#9ca3af;margin-top:2px">체감온도 ${r.feels_like_c}°C (${r.temp_level})</div>
+                ${tags ? '<div class="tt-tags">'+tags+'</div>' : ''}
+            `, { direction: 'top', offset: [0, -8] });
+
+            m.on('click', () => showDetail(r));
+
+            if (r.final_risk >= 55 && (r.is_uncovered || r.is_blind_spot)) {
+                const pulse = L.circleMarker([r.lat, r.lon], {
+                    radius: rad + 4,
+                    fillColor: 'transparent', fillOpacity: 0,
+                    color: r.is_uncovered ? '#ec4899' : '#a855f7',
+                    weight: 2, opacity: .5,
+                    className: 'pulse-marker',
+                });
+                markerLayer.addLayer(pulse);
+            }
+
+            markerLayer.addLayer(m);
+        });
+    }
+
+    /* ============================================================
+       PRIORITY LIST
+       ============================================================ */
+    function renderPrioList(regions) {
+        const sorted = [...regions].sort((a, b) => b.final_risk - a.final_risk).slice(0, 15);
+        const list = document.getElementById('prioList');
+        list.innerHTML = sorted.map((r, i) => {
+            let tags = '';
+            if (r.is_blind_spot) tags += '<span class="tag blind">쉼터사각</span>';
+            if (r.is_uncovered)  tags += '<span class="tag uncov">미배정</span>';
+            return `
+                <div class="ri fade-in ${selectedCode===r.region_code?'active':''}"
+                     style="animation-delay:${i*.03}s"
+                     onclick="focusRegion('${r.region_code}')" data-code="${r.region_code}">
+                     <div class="ri-rank ${i<3?'top':''}">${i+1}</div>
+                     <div class="ri-info">
+                         <div class="ri-name">${r.region_name}</div>
+                         <div class="ri-sub">
+                             <span class="badge ${riskClass(r.final_risk)}">${r.risk_grade}</span>
+                             ${tags}
+                         </div>
+                     </div>
+                     <div class="ri-score" style="color:${riskColor(r.final_risk)}">${r.final_risk}</div>
+                </div>`;
+        }).join('');
+    }
+
+    /* ============================================================
+       DETAIL PANEL
+       ============================================================ */
+    async function showDetail(r) {
+        selectedCode = r.region_code;
+        const color = riskColor(r.final_risk);
+        const cls = riskClass(r.final_risk);
+
+        document.getElementById('detailContent').innerHTML = `
+            <div class="d-name">${r.region_name}</div>
+            <div class="d-code">${r.region_code}</div>
+
+            <div class="d-score-card" style="border-color:${color}30">
+                <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${color}"></div>
+                <div class="d-score-val" style="color:${color}">${r.final_risk}</div>
+                <span class="badge ${cls}" style="font-size:12px;padding:4px 14px">${r.risk_grade}</span>
+            </div>
+
+            <div class="d-sec">
+                <div class="d-sec-title">🌡️ 실시간 기상 (기상청 실측)</div>
+                <div class="d-row"><span class="d-row-l">체감온도</span><span class="d-row-v" style="color:${color}">${r.feels_like_c}°C</span></div>
+                <div class="d-row"><span class="d-row-l">현재 기온</span><span class="d-row-v">${r.temperature_c ? r.temperature_c + '°C' : '-'}</span></div>
+                <div class="d-row"><span class="d-row-l">현재 습도</span><span class="d-row-v">${r.humidity_pct ? r.humidity_pct + '%' : '-'}</span></div>
+                <div class="d-row"><span class="d-row-l">폭염 단계</span><span class="d-row-v"><span class="badge ${cls}">${r.temp_level}</span></span></div>
+                ${r.announce_time ? `<div class="d-row"><span class="d-row-l">발표시각</span><span class="d-row-v" style="font-size:10px;color:var(--text-3)">${r.announce_time}</span></div>` : ''}
+            </div>
+
+            <div class="d-sec">
+                <div class="d-sec-title">📊 위험요소 분석</div>
+                ${bd('고령인구', r.elderly_score)}
+                ${bd('농업인', r.farmer_score)}
+                ${bd('쉼터접근성', r.shelter_score)}
+                ${bd('과거이력', r.history_score)}
+            </div>
+
+            <div class="d-sec">
+                <div class="d-sec-title">🏠 쉼터 현황</div>
+                <div class="d-row"><span class="d-row-l">관내 쉼터</span><span class="d-row-v">${r.shelter_count??'-'}개</span></div>
+                <div class="d-row"><span class="d-row-l">도보 5분권</span><span class="d-row-v">${r.within_400m_count??'-'}개</span></div>
+                <div class="d-row"><span class="d-row-l">최근접 거리</span><span class="d-row-v">${r.nearest_distance_m?r.nearest_distance_m.toFixed(0)+'m':'-'}</span></div>
+                <div class="d-row"><span class="d-row-l">사각지대</span><span class="d-row-v ${r.is_blind_spot?'no':'yes'}">${r.is_blind_spot?'⚠ 사각지대':'✅ 정상'}</span></div>
+                
+                <div style="margin-top:10px">
+                    <button class="sp-btn" style="background:rgba(16,185,129,.2);border:1px solid rgba(16,185,129,.4);color:#34d399" onclick="loadAreaShelters('${r.sigungu}', '${r.eupmyeondong || ''}')">
+                        🔍 관내 쉼터 지도에 표시하기
+                    </button>
+                    <div id="areaSheltersContainer"></div>
+                </div>
+            </div>
+
+            <div class="d-sec">
+                <div class="d-sec-title">👥 취약인구</div>
+                <div class="d-row"><span class="d-row-l">총 인구</span><span class="d-row-v">${(r.total_population??0).toLocaleString()}명</span></div>
+                <div class="d-row"><span class="d-row-l">65세 이상</span><span class="d-row-v">${(r.elderly_65_plus??0).toLocaleString()}명 (${((r.elderly_ratio??0)*100).toFixed(1)}%)</span></div>
+                <div class="d-row"><span class="d-row-l">농업인 비율</span><span class="d-row-v">${((r.farmer_ratio??0)*100).toFixed(1)}%</span></div>
+                <div class="d-row"><span class="d-row-l">독거노인</span><span class="d-row-v">${(r.solitary_elderly??0).toLocaleString()}명</span></div>
+            </div>
+
+            <div class="d-sec">
+                <div class="d-sec-title">📡 대응 채널</div>
+                <div class="d-row"><span class="d-row-l">생활지원사</span><span class="d-row-v ${r.has_care_worker?'yes':'no'}">${r.has_care_worker?'✅ 배정':'❌ 미배정'}</span></div>
+                <div class="d-row"><span class="d-row-l">주민생명 지킴이</span><span class="d-row-v ${r.has_village_guardian?'yes':'no'}">${r.has_village_guardian?'✅ 배정':'❌ 미배정'}</span></div>
+                <div class="d-row"><span class="d-row-l">마지막 순찰</span><span class="d-row-v">${r.last_patrol_date||'기록 없음'}</span></div>
+                ${r.is_uncovered?'<div style="margin-top:6px"><span class="tag uncov" style="font-size:10px;padding:3px 8px">⚠ 어떤 채널도 미배정</span></div>':''}
+            </div>
+
+            ${r.reasons&&r.reasons.length?`
+            <div class="d-sec">
+                <div class="d-sec-title">⚠️ 판단 근거</div>
+                ${r.reasons.map(t=>'<div class="reason"><span>•</span>'+t+'</div>').join('')}
+            </div>`:''}
+        `;
+
+        document.getElementById('detailPanel').classList.add('open');
+        document.querySelectorAll('.ri').forEach(el => el.classList.toggle('active', el.dataset.code === r.region_code));
+    }
+
+    async function loadAreaShelters(sigungu, eupmyeondong) {
+        const container = document.getElementById('areaSheltersContainer');
+        container.innerHTML = '<div style="font-size:11px;color:var(--text-3);margin-top:6px">쉼터 로딩 중…</div>';
+        
+        let url = `/api/shelters?sigungu=${encodeURIComponent(sigungu)}&limit=100`;
+        if (eupmyeondong) {
+            url += `&q=${encodeURIComponent(eupmyeondong)}`;
+        }
+        
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            
+            // 지도에 쉼터 표시 활성화
+            if (!showShelters) {
+                showShelters = true;
+                document.getElementById('shelterToggleBtn').classList.add('active');
+            }
+            renderShelterMarkers(data.shelters);
+            
+            if (!data.shelters || data.shelters.length === 0) {
+                container.innerHTML = '<div style="font-size:11px;color:#ef4444;margin-top:6px">관내 등록된 쉼터가 없습니다 (사각지대).</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <div class="shelter-list-box">
+                    ${data.shelters.slice(0, 15).map(s => `
+                        <div class="shelter-list-item" onclick="focusShelter(${s.lat}, ${s.lon}, '${escape(s.shelter_name)}')">
+                            <div class="sli-name">
+                                <span>🏠 ${s.shelter_name}</span>
+                                <span style="color:#10b981">${s.capacity?s.capacity+'명':''}</span>
+                            </div>
+                            <div class="sli-addr">${s.road_address || s.lot_address}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } catch (e) {
+            container.innerHTML = '<div style="font-size:11px;color:#ef4444;margin-top:6px">쉼터 로드 오류</div>';
+        }
+    }
+
+    function focusShelter(lat, lon, name) {
+        map.setView([lat, lon], 16, { animate: true });
+    }
+
+    function bd(label, score) {
+        const s = score ?? 0;
+        const c = riskColor(s);
+        return `<div class="bd-item">
+            <div class="bd-hdr"><span class="bd-lbl">${label}</span><span class="bd-val" style="color:${c}">${s.toFixed(1)}</span></div>
+            <div class="bd-bar"><div class="bd-fill" style="width:${s}%;background:${c}"></div></div>
+        </div>`;
+    }
+
+    function closeDetail() {
+        document.getElementById('detailPanel').classList.remove('open');
+        selectedCode = null;
+        document.querySelectorAll('.ri').forEach(el => el.classList.remove('active'));
+    }
+
+    /* ============================================================
+       INTERACTIONS
+       ============================================================ */
+    function focusRegion(code) {
+        const r = allRegions.find(x => x.region_code === code);
+        if (r) {
+            map.setView([r.lat, r.lon], r.level === 'sigungu' ? 11 : 13, { animate: true });
+            showDetail(r);
+        }
+    }
+
+    function setLevel(level) {
+        currentLevel = level;
+        document.querySelectorAll('.level-btn').forEach(b => b.classList.toggle('active', b.dataset.level === level));
+        closeDetail();
+        loadData();
+    }
+
+    function onSearch(q) {
+        q = q.trim().toLowerCase();
+        if (!q) { renderMarkers(allRegions); renderPrioList(allRegions); return; }
+        const f = allRegions.filter(r => r.region_name.toLowerCase().includes(q) || r.region_code.includes(q));
+        renderMarkers(f);
+        renderPrioList(f);
+    }
+
+    /* ============================================================
+       START
+       ============================================================ */
+    init();
+    </script>
+</body>
+</html>

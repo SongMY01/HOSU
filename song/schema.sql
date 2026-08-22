@@ -1,0 +1,106 @@
+-- HOSU 폭염 위험도 데이터 스키마
+-- 파이프라인이 write, MCP 서버가 read-only로 사용하는 계약
+
+-- 1. 행정구역 마스터 (정적, 연 단위 갱신)
+CREATE TABLE IF NOT EXISTS regions (
+    region_code   TEXT PRIMARY KEY,       -- 행정표준코드 (법정동코드 10자리)
+    sido          TEXT NOT NULL,          -- 시도명 (경상북도)
+    sigungu       TEXT NOT NULL,          -- 시군구명 (포항시 북구)
+    eupmyeondong  TEXT,                   -- 읍면동명 (NULL이면 시군구 단위 집계행)
+    level         TEXT NOT NULL,          -- 'sigungu' | 'eupmyeondong'
+    lat           REAL NOT NULL,          -- 중심점 위도 (WGS84)
+    lon           REAL NOT NULL,          -- 중심점 경도 (WGS84)
+    kma_nx        INTEGER,                -- 기상청 격자 X
+    kma_ny        INTEGER                 -- 기상청 격자 Y
+);
+
+-- 2. 취약인구 지표 (정적, 연 단위 갱신)
+CREATE TABLE IF NOT EXISTS vulnerability (
+    region_code       TEXT PRIMARY KEY REFERENCES regions(region_code),
+    total_population  INTEGER,
+    elderly_65_plus   INTEGER,            -- 65세 이상 인구
+    elderly_ratio     REAL,               -- 0.0 ~ 1.0
+    farmer_ratio      REAL,               -- 농업인 비율 0.0 ~ 1.0
+    solitary_elderly  INTEGER,            -- 독거노인 수 (집계값, 개인정보 아님)
+    base_year         INTEGER             -- 통계 기준연도
+);
+
+-- 3. 무더위쉼터 접근성 (준정적, 주 단위 갱신)
+CREATE TABLE IF NOT EXISTS shelter_access (
+    region_code        TEXT PRIMARY KEY REFERENCES regions(region_code),
+    shelter_count      INTEGER,           -- 관내 쉼터 총 개수
+    within_400m_count  INTEGER,           -- 중심점 기준 도보 5분(400m) 내 쉼터 수
+    nearest_distance_m REAL,              -- 최근접 쉼터까지 거리(m)
+    is_blind_spot      INTEGER,           -- 1이면 도보권 쉼터 없음 (사각지대)
+    updated_at         TEXT
+);
+
+-- 4. 온열질환 발생 이력 (일 단위 갱신, 시군구 해상도)
+CREATE TABLE IF NOT EXISTS heat_illness_history (
+    region_code    TEXT REFERENCES regions(region_code),
+    year           INTEGER,
+    case_count     INTEGER,               -- 연간 온열질환자 수
+    death_count    INTEGER,
+    PRIMARY KEY (region_code, year)
+);
+
+-- 5. 사전계산된 정적 위험도 점수 (파이프라인 산출물)
+CREATE TABLE IF NOT EXISTS static_risk_scores (
+    region_code        TEXT PRIMARY KEY REFERENCES regions(region_code),
+    elderly_score      REAL,              -- 0~100 정규화
+    farmer_score       REAL,
+    shelter_score      REAL,              -- 접근성 나쁠수록 높음
+    history_score      REAL,
+    static_total       REAL,              -- 가중합 (실시간 기온 제외한 기저 위험도)
+    computed_at        TEXT
+);
+
+-- 6. 채널 커버리지 (TF 대시보드용, 시뮬레이션 데이터 포함)
+CREATE TABLE IF NOT EXISTS channel_coverage (
+    region_code           TEXT PRIMARY KEY REFERENCES regions(region_code),
+    has_care_worker       INTEGER,        -- 생활지원사 관할 여부
+    has_village_guardian  INTEGER,        -- 주민생명 지킴이 순찰 대상 여부
+    last_patrol_date      TEXT,           -- 마지막 순찰일 (YYYY-MM-DD)
+    is_uncovered          INTEGER         -- 1이면 어떤 채널도 닿지 않음
+);
+
+-- 7. 무더위쉼터 마스터 위치 및 상세 시설 정보
+CREATE TABLE IF NOT EXISTS shelters (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    sigungu        TEXT NOT NULL,          -- 시군명 (포항시, 의성군 등)
+    shelter_name   TEXT NOT NULL,          -- 쉼터명 (구룡포읍행정복지센터 등)
+    shelter_type   TEXT,                   -- 쉼터유형 (공공시설, 특정계층이용시설 등)
+    road_address   TEXT,                   -- 도로명주소
+    lot_address    TEXT,                   -- 지번주소
+    lat            REAL NOT NULL,          -- 위도 (WGS84)
+    lon            REAL NOT NULL,          -- 경도 (WGS84)
+    area_m2        REAL,                   -- 시설면적(㎡)
+    capacity       INTEGER,                -- 이용가능인원
+    fans           INTEGER,                -- 선풍기 보유대수
+    aircons        INTEGER,                -- 에어컨 보유대수
+    night_open     TEXT,                   -- 야간운영여부 (예/아니오)
+    weekend_open   TEXT,                   -- 휴일운영여부 (예/아니오)
+    stay_open      TEXT                    -- 숙박가능여부 (예/아니오)
+);
+
+-- 8. 실시간/단기예보 기상 실측 데이터 (시간 단위 갱신)
+CREATE TABLE IF NOT EXISTS realtime_weather (
+    region_code   TEXT PRIMARY KEY REFERENCES regions(region_code),
+    sigungu       TEXT NOT NULL,
+    eupmyeondong  TEXT,
+    grid_nx       INTEGER,
+    grid_ny       INTEGER,
+    announce_time TEXT,
+    temperature   REAL,               -- 기온(°C)
+    humidity      REAL,               -- 습도(%)
+    feels_like    REAL,               -- 체감온도(°C)
+    risk_tier     TEXT                -- 관심 | 주의 | 경고 | 위험
+);
+
+CREATE INDEX IF NOT EXISTS idx_regions_sigungu ON regions(sigungu);
+CREATE INDEX IF NOT EXISTS idx_static_total ON static_risk_scores(static_total DESC);
+CREATE INDEX IF NOT EXISTS idx_shelters_sigungu ON shelters(sigungu);
+CREATE INDEX IF NOT EXISTS idx_shelters_lat_lon ON shelters(lat, lon);
+CREATE INDEX IF NOT EXISTS idx_weather_nx_ny ON realtime_weather(grid_nx, grid_ny);
+
+
