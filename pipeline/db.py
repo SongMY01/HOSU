@@ -87,17 +87,6 @@ CREATE TABLE IF NOT EXISTS HEAT_ILLNESS (
     PRIMARY KEY (sigungu_code, occur_date, age_group)
 );
 
-CREATE TABLE IF NOT EXISTS ELDERLY_ALONE (
-    sigungu_code TEXT,
-    year INTEGER,
-    age_65_69 INTEGER,
-    age_70_74 INTEGER,
-    age_75_79 INTEGER,
-    age_80_84 INTEGER,
-    age_85_over INTEGER,
-    PRIMARY KEY (sigungu_code, year)
-);
-
 CREATE TABLE IF NOT EXISTS SAFETY_TARGET (
     target_id TEXT PRIMARY KEY,
     emd_code TEXT REFERENCES ADMIN_REGION(emd_code),

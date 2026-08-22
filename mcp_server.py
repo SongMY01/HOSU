@@ -50,23 +50,6 @@ def get_heat_illness_status(sigungu_code: str) -> list[dict]:
     return _get_heat_illness_status(get_conn(), sigungu_code)
 
 
-def _get_elderly_living_alone_density(conn: sqlite3.Connection, sigungu_code: str) -> dict | None:
-    cols = ["year", "age_65_69", "age_70_74", "age_75_79", "age_80_84", "age_85_over"]
-    row = conn.execute(
-        f"SELECT {', '.join(cols)} FROM ELDERLY_ALONE "
-        "WHERE sigungu_code = ? ORDER BY year DESC LIMIT 1",
-        (sigungu_code,),
-    ).fetchone()
-    return dict(zip(cols, row)) if row else None
-
-
-@mcp.tool()
-def get_elderly_living_alone_density(sigungu_code: str) -> dict | None:
-    """sigungu_code(경북 시군구코드) 지역의 최신 연도 독거노인 연령대별 인원을 조회한다."""
-    require_target_region(sigungu_code)
-    return _get_elderly_living_alone_density(get_conn(), sigungu_code)
-
-
 def _get_welfare_facilities(conn: sqlite3.Connection, emd_code: str) -> list[dict]:
     cols = ["facility_id", "name", "facility_type", "lat", "lon"]
     rows = conn.execute(

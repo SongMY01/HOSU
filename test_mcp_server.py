@@ -2,11 +2,9 @@
 
 from pipeline.db import get_conn
 from mcp_server import (
-    _get_elderly_living_alone_density,
     _get_heat_illness_status,
     _get_heatwave_alert,
     _get_welfare_facilities,
-    get_elderly_living_alone_density,
     get_heat_illness_status,
     get_heatwave_alert,
     get_welfare_facilities,
@@ -31,11 +29,6 @@ def _seed(conn):
         (SGG,),
     )
     conn.execute(
-        "INSERT INTO ELDERLY_ALONE (sigungu_code, year, age_65_69, age_70_74, age_75_79, age_80_84, age_85_over) "
-        "VALUES (?, 2026, 120, 98, 76, 54, 32)",
-        (SGG,),
-    )
-    conn.execute(
         "INSERT INTO WELFARE_FACILITY (facility_id, emd_code, name, facility_type, lat, lon) "
         "VALUES ('WF001', ?, '안동노인복지관', '노인복지관', 36.5684, 128.7294)",
         (EMD,),
@@ -43,7 +36,7 @@ def _seed(conn):
     conn.commit()
 
 
-def test_all_four_tools_return_seeded_rows():
+def test_all_three_tools_return_seeded_rows():
     conn = get_conn(":memory:")
     _seed(conn)
 
@@ -53,9 +46,6 @@ def test_all_four_tools_return_seeded_rows():
     illness = _get_heat_illness_status(conn, SGG)
     assert len(illness) == 1 and illness[0]["patient_count"] == 3, illness
 
-    elderly = _get_elderly_living_alone_density(conn, SGG)
-    assert elderly is not None and elderly["age_65_69"] == 120, elderly
-
     facilities = _get_welfare_facilities(conn, EMD)
     assert len(facilities) == 1 and facilities[0]["name"] == "안동노인복지관", facilities
 
@@ -64,7 +54,6 @@ def test_unknown_gyeongbuk_region_returns_empty():
     """경북이지만 데이터가 없는 경우 — 빈 결과가 맞다."""
     conn = get_conn(":memory:")
     assert _get_heatwave_alert(conn, "47999") == []
-    assert _get_elderly_living_alone_density(conn, "47999") is None
 
 
 def test_non_gyeongbuk_region_raises_not_empty():
@@ -72,7 +61,6 @@ def test_non_gyeongbuk_region_raises_not_empty():
     for tool, code in [
         (get_heatwave_alert, "11110"),  # 서울
         (get_heat_illness_status, "27110"),  # 대구
-        (get_elderly_living_alone_density, "26110"),  # 부산
         (get_welfare_facilities, "48170"),  # 경남
     ]:
         try:
@@ -84,7 +72,7 @@ def test_non_gyeongbuk_region_raises_not_empty():
 
 
 if __name__ == "__main__":
-    test_all_four_tools_return_seeded_rows()
+    test_all_three_tools_return_seeded_rows()
     test_unknown_gyeongbuk_region_returns_empty()
     test_non_gyeongbuk_region_raises_not_empty()
     print("OK: mcp_server.py self-check passed")
