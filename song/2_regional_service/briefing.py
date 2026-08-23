@@ -12,30 +12,18 @@ ANTHROPIC_API_KEY가 없거나 API 호출이 실패하면 규칙 기반 문장�
 import hashlib
 import json
 import os
-from datetime import date, datetime
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 MODEL = "claude-haiku-4-5-20251001"
-TOP_N = 3           # 브리핑에 이름을 올릴 최우선 지역 수
-PATROL_GAP_DAYS = 3  # 이 일수 이상 순찰이 없으면 공백으로 본다
+TOP_N = 3  # 브리핑에 이름을 올릴 최우선 지역 수
 
 _cache = {}
 
 
 # ---------------------------------------------------------------- facts
-
-def _patrol_gap(last_patrol_date):
-    """마지막 순찰 이후 경과일. 기록이 없거나 형식이 깨졌으면 None."""
-    if not last_patrol_date:
-        return None
-    try:
-        return (date.today() - datetime.strptime(last_patrol_date, "%Y-%m-%d").date()).days
-    except ValueError:
-        return None
-
 
 def collect_facts(regions, summary):
     """브리핑에 쓸 사실만 추린다. 여기서 나온 숫자가 최종값이며 모델은 이걸 바꿀 수 없다."""
@@ -49,29 +37,26 @@ def collect_facts(regions, summary):
         if lv:
             tiers[lv] = tiers.get(lv, 0) + 1
 
-    # 쉼터도 없고 담당 채널도 없는 곳 — 대시보드에서 필터 조합으로는 안 보이는 교집합
-    double_blind = [r for r in villages if r.get("is_blind_spot") and r.get("is_uncovered")]
+    # 위험 단계이면서 도보권 쉼터도 없는 곳 — 더위를 피할 곳 자체가 없는 지역이다.
+    # 대시보드에서는 두 필터를 동시에 걸 수 없어 이 교집합이 잘 드러나지 않는다.
+    no_refuge = [r for r in villages
+                 if r.get("is_blind_spot") and (r.get("final_risk") or 0) >= 55]
 
     top = sorted(villages, key=lambda r: -(r.get("final_risk") or 0))[:TOP_N]
-    priority = []
-    for r in top:
-        gap = _patrol_gap(r.get("last_patrol_date"))
-        priority.append({
-            "지역": r["region_name"],
-            "위험도": r.get("final_risk"),
-            "등급": r.get("risk_grade"),
-            "체감온도": r.get("feels_like_c"),
-            "판단근거": r.get("reasons", []),
-            "순찰공백일": gap if (gap is not None and gap >= PATROL_GAP_DAYS) else None,
-        })
+    priority = [{
+        "지역": r["region_name"],
+        "위험도": r.get("final_risk"),
+        "등급": r.get("risk_grade"),
+        "체감온도": r.get("feels_like_c"),
+        "판단근거": r.get("reasons", []),
+    } for r in top]
 
     return {
         "기준시각": (villages[0].get("announce_time") if villages else None),
         "대상_읍면동_수": len(villages),
         "폭염단계_분포": tiers,
         "쉼터사각지대_수": summary.get("shelter_blind_spots"),
-        "채널미배정_수": summary.get("channel_uncovered"),
-        "쉼터없고_순찰도없는_읍면동_수": len(double_blind),
+        "고위험이면서_쉼터없는_읍면동_수": len(no_refuge),
         "최우선_지역": priority,
     }
 
@@ -85,10 +70,10 @@ def _fallback_text(facts):
     lines = [
         f"경북 읍·면·동 {facts['대상_읍면동_수']}곳 중 {tiers.get(worst, 0)}곳이 '{worst}' 단계입니다."
     ]
-    if facts["쉼터없고_순찰도없는_읍면동_수"]:
+    if facts["고위험이면서_쉼터없는_읍면동_수"]:
         lines.append(
-            f"이 가운데 무더위쉼터도 없고 담당 인력도 배정되지 않은 곳이 "
-            f"{facts['쉼터없고_순찰도없는_읍면동_수']}곳으로, 가장 먼저 확인이 필요합니다."
+            f"이 가운데 도보권에 무더위쉼터가 없는 고위험 지역이 "
+            f"{facts['고위험이면서_쉼터없는_읍면동_수']}곳으로, 가장 먼저 확인이 필요합니다."
         )
     if facts["최우선_지역"]:
         names = ", ".join(f"{p['지역']}(위험도 {p['위험도']})" for p in facts["최우선_지역"])

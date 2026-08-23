@@ -101,7 +101,6 @@ MCP 클라이언트는 임의의 작업 디렉토리에서 서버를 실행하�
 |---|---|
 | `get_heat_risk_score(region)` | 지역의 오늘자 위험도 점수 + 판단 근거 |
 | `list_high_priority_regions(top_n, level)` | 우선대응 지역 순위 (`level`: `sigungu` \| `eupmyeondong`) |
-| `find_uncovered_regions(min_risk)` | 위험도는 높은데 어떤 대응 채널도 닿지 않는 지역 |
 
 **현장 대응**
 
@@ -111,7 +110,7 @@ MCP 클라이언트는 임의의 작업 디렉토리에서 서버를 실행하�
 | `get_shelter_coverage(region)` | 무더위쉼터 도보권(400m) 접근성, 사각지대 여부 |
 | `get_nearby_shelters(region, radius_m, limit)` | 반경 내 쉼터를 거리순으로 — 냉방기기·야간운영·카카오맵 링크 포함 |
 | `search_shelters(keyword, sigungu, limit)` | 쉼터명·주소 키워드 검색 |
-| `get_vulnerable_population(region)` | 고령(65+/75+/85+)·독거노인·농업인 집계 지표 |
+| `get_vulnerable_population(region)` | 고령인구(65+/75+/85+ 초고령) 연령대별 집계 지표 |
 
 ### 응답 예시
 
@@ -188,8 +187,6 @@ cp .env.example .env    # KMA_API_KEY 항목에 발급받은 인증키 입력
 
 모든 데이터는 **행정구역 단위 집계값**입니다.
 개인 식별정보, 주소, 연락처는 수집·저장·반환하지 않습니다.
-`channel_coverage` 테이블의 채널 배정 현황은 지자체 내부 데이터이므로
-현재는 시뮬레이션 값이며, 실제 도입 시 기관 데이터로 교체해야 합니다.
 
 ## 확장
 

@@ -146,8 +146,6 @@ def load_vulnerability():
             "elderly_ratio": round(elderly / total, 4) if total else 0.0,
             "elderly_75_ratio": round(float(r["elderly_75_ratio"]) / 100.0, 4),
             "elderly_85_ratio": round(float(r["elderly_85_ratio"]) / 100.0, 4),
-            "farmer_ratio": float(r["farmer_ratio"]),
-            "solitary_elderly": int(r["solitary_elderly"]),
             "base_year": int(r["base_year"]),
         })
     return out
@@ -252,18 +250,6 @@ def load_heat_illness(regions):
         {"region_code": code, "year": year, "age_group": ag,
          "case_count": n, "death_count": None}
         for (code, year, ag), n in sorted(counts.items())
-    ]
-
-
-def load_channel_coverage():
-    """채널 커버리지. 생활지원사 관할/지킴이 순찰계획은 비공개 데이터이므로
-    해커톤에서는 시뮬레이션 값 사용. 실제 도입 시 지자체 내부 데이터로 교체."""
-    return [
-        {"region_code": r["region_code"],
-         "has_care_worker": int(r["has_care_worker"]),
-         "has_village_guardian": int(r["has_village_guardian"]),
-         "last_patrol_date": r["last_patrol_date"] or None}
-        for r in read_csv("channel_coverage.csv")
     ]
 
 
@@ -392,7 +378,7 @@ def compute_static_scores(regions, vuln, access, illness):
 
 # ---------------------------------------------------------------- persist
 
-def write_db(regions, vuln, access, illness, scores, coverage, shelters, weather):
+def write_db(regions, vuln, access, illness, scores, shelters, weather):
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
@@ -407,7 +393,7 @@ def write_db(regions, vuln, access, illness, scores, coverage, shelters, weather
     conn.executemany(
         "INSERT INTO vulnerability VALUES (:region_code,:total_population,"
         ":elderly_65_plus,:elderly_ratio,:elderly_75_ratio,:elderly_85_ratio,"
-        ":farmer_ratio,:solitary_elderly,:base_year)", vuln)
+        ":base_year)", vuln)
     conn.executemany(
         "INSERT INTO shelter_access VALUES (:region_code,:shelter_count,"
         ":within_400m_count,:nearest_distance_m,:is_blind_spot,:updated_at)", access)
@@ -417,15 +403,6 @@ def write_db(regions, vuln, access, illness, scores, coverage, shelters, weather
     conn.executemany(
         "INSERT INTO static_risk_scores VALUES (:region_code,:elderly_score,"
         ":shelter_score,:history_score,:static_total,:computed_at)", scores)
-
-    cov_rows = []
-    for c in coverage:
-        c = dict(c)
-        c["is_uncovered"] = 0 if (c["has_care_worker"] or c["has_village_guardian"]) else 1
-        cov_rows.append(c)
-    conn.executemany(
-        "INSERT INTO channel_coverage VALUES (:region_code,:has_care_worker,"
-        ":has_village_guardian,:last_patrol_date,:is_uncovered)", cov_rows)
 
     conn.executemany(
         "INSERT INTO shelters (sigungu, shelter_name, shelter_type, road_address, lot_address, "
@@ -470,8 +447,7 @@ def main():
     scores = compute_static_scores(regions, vuln, access, illness)
 
     print("[6/6] DB 저장")
-    coverage = load_channel_coverage()
-    write_db(regions, vuln, access, illness, scores, coverage, shelters, weather)
+    write_db(regions, vuln, access, illness, scores, shelters, weather)
     print(f"      완료 -> {DB_PATH}")
 
     top = sorted(scores, key=lambda s: -s["static_total"])[:5]

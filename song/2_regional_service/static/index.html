@@ -636,9 +636,9 @@
                 <div class="stat-val" style="color:var(--blind)">${s.shelter_blind_spots}</div>
                 <div class="stat-lbl">쉼터 사각지대</div>
             </div>
-            <div class="stat-card fade-in ${s.channel_uncovered?'alert':''}">
-                <div class="stat-val" style="color:var(--uncov)">${s.channel_uncovered}</div>
-                <div class="stat-lbl">채널 미배정</div>
+            <div class="stat-card fade-in">
+                <div class="stat-val" style="color:var(--accent)">${(s.shelters_total??5605).toLocaleString()}</div>
+                <div class="stat-lbl">총 무더위쉼터</div>
             </div>
             <div class="stat-card wide fade-in">
                 <div class="stat-val" style="color:${riskColor(s.avg_static_risk)}">${s.avg_static_risk}</div>
@@ -665,19 +665,11 @@
             if (r.is_blind_spot) {
                 opts.color = '#a855f7'; opts.weight = 3; opts.dashArray = '5 5';
             }
-            if (r.is_uncovered) {
-                opts.color = '#ec4899'; opts.weight = 3;
-            }
-            if (r.is_blind_spot && r.is_uncovered) {
-                opts.color = '#ef4444'; opts.weight = 4;
-                opts.dashArray = '5 5'; opts.fillOpacity = .75;
-            }
 
             const m = L.circleMarker([r.lat, r.lon], opts);
 
             let tags = '';
             if (r.is_blind_spot) tags += '<span class="tag blind">🏠 쉼터 사각</span>';
-            if (r.is_uncovered) tags += '<span class="tag uncov">📡 미배정</span>';
 
             m.bindTooltip(`
                 <div class="tt-name">${r.region_name}</div>
@@ -688,11 +680,11 @@
 
             m.on('click', () => showDetail(r));
 
-            if (r.final_risk >= 55 && (r.is_uncovered || r.is_blind_spot)) {
+            if (r.final_risk >= 55 && r.is_blind_spot) {
                 const pulse = L.circleMarker([r.lat, r.lon], {
                     radius: rad + 4,
                     fillColor: 'transparent', fillOpacity: 0,
-                    color: r.is_uncovered ? '#ec4899' : '#a855f7',
+                    color: '#a855f7',
                     weight: 2, opacity: .5,
                     className: 'pulse-marker',
                 });
@@ -712,7 +704,6 @@
         list.innerHTML = sorted.map((r, i) => {
             let tags = '';
             if (r.is_blind_spot) tags += '<span class="tag blind">쉼터사각</span>';
-            if (r.is_uncovered)  tags += '<span class="tag uncov">미배정</span>';
             return `
                 <div class="ri fade-in ${selectedCode===r.region_code?'active':''}"
                      style="animation-delay:${i*.03}s"
@@ -783,16 +774,8 @@
                 <div class="d-sec-title">👥 취약인구</div>
                 <div class="d-row"><span class="d-row-l">총 인구</span><span class="d-row-v">${(r.total_population??0).toLocaleString()}명</span></div>
                 <div class="d-row"><span class="d-row-l">65세 이상</span><span class="d-row-v">${(r.elderly_65_plus??0).toLocaleString()}명 (${((r.elderly_ratio??0)*100).toFixed(1)}%)</span></div>
-                <div class="d-row"><span class="d-row-l">농업인 비율</span><span class="d-row-v">${((r.farmer_ratio??0)*100).toFixed(1)}%</span></div>
-                <div class="d-row"><span class="d-row-l">독거노인</span><span class="d-row-v">${(r.solitary_elderly??0).toLocaleString()}명</span></div>
-            </div>
-
-            <div class="d-sec">
-                <div class="d-sec-title">📡 대응 채널</div>
-                <div class="d-row"><span class="d-row-l">생활지원사</span><span class="d-row-v ${r.has_care_worker?'yes':'no'}">${r.has_care_worker?'✅ 배정':'❌ 미배정'}</span></div>
-                <div class="d-row"><span class="d-row-l">주민생명 지킴이</span><span class="d-row-v ${r.has_village_guardian?'yes':'no'}">${r.has_village_guardian?'✅ 배정':'❌ 미배정'}</span></div>
-                <div class="d-row"><span class="d-row-l">마지막 순찰</span><span class="d-row-v">${r.last_patrol_date||'기록 없음'}</span></div>
-                ${r.is_uncovered?'<div style="margin-top:6px"><span class="tag uncov" style="font-size:10px;padding:3px 8px">⚠ 어떤 채널도 미배정</span></div>':''}
+                <div class="d-row"><span class="d-row-l">75세 이상</span><span class="d-row-v">${((r.elderly_75_ratio??0)*100).toFixed(1)}%</span></div>
+                <div class="d-row"><span class="d-row-l">85세 이상 (초고령)</span><span class="d-row-v">${((r.elderly_85_ratio??0)*100).toFixed(1)}%</span></div>
             </div>
 
             ${r.reasons&&r.reasons.length?`
