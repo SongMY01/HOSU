@@ -101,6 +101,7 @@ export default function App() {
           showShelters={showShelters}
           onSelectRegion={handleSelectRegion}
           flyTarget={flyTarget}
+          summary={summary}
         />
       </main>
 
@@ -110,6 +111,7 @@ export default function App() {
           onClose={handleCloseDetail}
           onFlyTo={handleFlyTo}
           onShowAreaShelters={handleShowAreaShelters}
+          summary={summary}
         />
       )}
     </div>

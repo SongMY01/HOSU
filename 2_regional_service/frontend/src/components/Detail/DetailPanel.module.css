@@ -39,6 +39,8 @@
 .rowV { font-weight: 600; color: var(--text-1); }
 .yes { color: var(--risk-low) !important; }
 .no  { color: var(--risk-crit) !important; }
+/* 판정 단위가 아님. 안전(초록)으로도 위험(빨강)으로도 읽히면 안 된다. */
+.na  { color: var(--text-3) !important; }
 
 .badge {
   display: inline-flex; align-items: center;

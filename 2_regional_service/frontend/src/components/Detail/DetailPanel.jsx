@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { riskColor, riskClass } from '../../utils/risk';
+import { distanceLabel, distanceHint, blindSpotDisplay } from '../../utils/shelter';
 import { fetchShelters } from '../../api/hosuApi';
 import SendPreviewModal from '../Modal/SendPreviewModal';
 import styles from './DetailPanel.module.css';
@@ -20,7 +21,7 @@ function BreakdownBar({ label, score }) {
   );
 }
 
-export default function DetailPanel({ region, onClose, onFlyTo, onShowAreaShelters }) {
+export default function DetailPanel({ region, onClose, onFlyTo, onShowAreaShelters, summary }) {
   const [areaShelters, setAreaShelters] = useState([]);
   const [sheltersLoading, setSheltersLoading] = useState(false);
   const [sheltersLoaded, setSheltersLoaded] = useState(false);
@@ -37,6 +38,7 @@ export default function DetailPanel({ region, onClose, onFlyTo, onShowAreaShelte
   const r = region;
   const color = riskColor(r.final_risk);
   const cls = riskClass(r.final_risk);
+  const blind = blindSpotDisplay(r, summary);
 
   async function loadAreaShelters() {
     setSheltersLoading(true);
@@ -109,11 +111,14 @@ export default function DetailPanel({ region, onClose, onFlyTo, onShowAreaShelte
           <div className={styles.secTitle}>🏠 쉼터 현황</div>
           <div className={styles.row}><span className={styles.rowL}>관내 쉼터</span><span className={styles.rowV}>{r.shelter_count ?? '-'}개</span></div>
           <div className={styles.row}><span className={styles.rowL}>도보 5분권</span><span className={styles.rowV}>{r.within_400m_count ?? '-'}개</span></div>
-          <div className={styles.row}><span className={styles.rowL}>최근접 거리</span><span className={styles.rowV}>{r.nearest_distance_m ? r.nearest_distance_m.toFixed(0) + 'm' : '-'}</span></div>
           <div className={styles.row}>
-            <span className={styles.rowL}>사각지대</span>
-            <span className={`${styles.rowV} ${r.is_blind_spot ? styles.no : styles.yes}`}>
-              {r.is_blind_spot ? '⚠ 사각지대' : '✅ 정상'}
+            <span className={styles.rowL} title={distanceHint(r)}>{distanceLabel(r)}</span>
+            <span className={styles.rowV}>{r.nearest_distance_m ? r.nearest_distance_m.toFixed(0) + 'm' : '-'}</span>
+          </div>
+          <div className={styles.row}>
+            <span className={styles.rowL}>쉼터 접근성</span>
+            <span className={`${styles.rowV} ${styles[blind.tone]}`} title={blind.hint}>
+              {blind.text}
             </span>
           </div>
 
@@ -124,7 +129,9 @@ export default function DetailPanel({ region, onClose, onFlyTo, onShowAreaShelte
           )}
 
           {sheltersLoaded && areaShelters.length === 0 && (
-            <div className={styles.noShelter}>관내 등록된 쉼터가 없습니다 (사각지대).</div>
+            <div className={styles.noShelter}>
+              관내 등록된 쉼터가 없습니다{r.is_blind_spot === 1 ? ' (사각지대).' : '.'}
+            </div>
           )}
 
           {areaShelters.length > 0 && (

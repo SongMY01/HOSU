@@ -1,6 +1,7 @@
+import { criteria } from '../../utils/shelter';
 import styles from './MapLegend.module.css';
 
-export default function MapLegend() {
+export default function MapLegend({ summary }) {
   return (
     <div className={styles.legend}>
       <div className={styles.title}>위험도 범례</div>
@@ -9,7 +10,7 @@ export default function MapLegend() {
       <div className={styles.item}><div className={styles.dot} style={{ background: '#f59e0b' }} /><span>보통 (35–54)</span></div>
       <div className={styles.item}><div className={styles.dot} style={{ background: '#10b981' }} /><span>낮음 (&lt;35)</span></div>
       <div className={styles.divider} />
-      <div className={styles.item}><div className={`${styles.dot} ${styles.blind}`} /><span>쉼터 사각지대</span></div>
+      <div className={styles.item}><div className={`${styles.dot} ${styles.blind}`} /><span>쉼터 사각지대 (도보 {criteria(summary).blind_spot_walk_min}분 초과)</span></div>
       <div className={styles.divider} />
       <div className={styles.item}>
         <div className={styles.dot} style={{ background: '#10b981', boxShadow: '0 0 8px rgba(16,185,129,.6)' }} />
