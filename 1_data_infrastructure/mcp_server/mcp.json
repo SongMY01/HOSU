@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "hosu-heat-risk": {
+      "command": "python",
+      "args": [
+        "/Users/myone/Documents/GitHub/HOSU/1_data_infrastructure/mcp_server/server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/myone/Documents/GitHub/HOSU/1_data_infrastructure:/Users/myone/Documents/GitHub/HOSU/1_data_infrastructure/mcp_server"
+      }
+    }
+  }
+}

@@ -1,74 +1,109 @@
-# HOSU — 경북 폭염 위험도 데이터 인프라
+# HOSU — 경북 폭염 위험도 데이터 인프라 & 대시보드
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+JunctionX Korea 2026 · 마이크로소프트 코리아 트랙 (경상북도 현안 해결)
 
-**JunctionX Korea 2026 · 마이크로소프트 코리아 트랙 (경상북도 현안 해결)**
-
-경상북도 폭염 대응 공공데이터를 하나의 행정코드·좌표계로 정규화하고,
-AI가 즉시 호출할 수 있는 **MCP(Model Context Protocol) 서버**로 공개하는 오픈 데이터 인프라입니다.
-그 위에 경북 폭염TF가 실제로 쓰는 **의사결정 대시보드**를 얹었습니다.
-
-```
-경북 읍·면·동 383곳 + 시군구 23곳   |   무더위쉼터 5,605개소   |   MCP Tool 8종
-```
+경상북도 폭염 대응 공공데이터를 정규화·결합해, AI가 즉시 호출할 수 있는
+표준 MCP 서버(Layer 1) 및 실시간 행정 대시보드(Layer 2)로 제공하는 오픈 솔루션입니다.
 
 ---
 
-## 빠른 시작 (3분)
+## 🔗 서비스 링크
 
-```bash
-git clone <이 저장소>
-cd JHosu/song
-
-pip install -r requirements.txt
-cp .env.example .env          # API 키 없이도 전부 동작합니다
-
-python 1_data_infrastructure/pipeline/build.py    # 공공데이터 → 정규화 DB
-python 2_regional_service/app.py                  # http://localhost:5050
-```
-
-API 키가 없어도 됩니다 — 정규화된 공공데이터 CSV가 저장소에 포함돼 있습니다.
+- **🌐 웹 대시보드 (Vercel)**: [https://hosu-dashboard.vercel.app](https://hosu-dashboard.vercel.app)
+- **⚙️ 백엔드 API & Remote MCP (Railway)**: [https://hosu-backend-production.up.railway.app](https://hosu-backend-production.up.railway.app)
+- **📡 Remote MCP SSE Endpoint**: `https://hosu-backend-production.up.railway.app/sse`
 
 ---
 
-## 저장소 구성
-
-트랙이 제시한 두 갈래(**데이터 인프라 구축** / **지역 문제해결 서비스**)를
-레이어로 분리해 둘 다 구현했습니다.
+## 🏛️ 프로젝트 아키텍처
 
 ```
-song/
-├── 1_data_infrastructure/     [Layer 1] 공공데이터 정규화 & MCP 서버
-│   ├── pipeline/build.py      좌표계 통일 → 행정코드 결합 → 위험도 스코어링
-│   ├── mcp_server/server.py   AI가 호출하는 MCP Tool 8종
-│   └── data/                  정규화 SQLite DB + 원천 공공데이터 CSV 6종
+HOSU/
+├── 1_data_infrastructure/        # [Layer 1] 공공데이터 정규화 & MCP 서버 인프라
+│   ├── data/                     # 정규화 SQLite DB (hosu.db) 및 원천 CSV (6종)
+│   ├── pipeline/                 # 데이터 정규화 및 스코어링 배치 (build.py, schema.sql)
+│   └── mcp_server/               # AI 연동 표준 FastMCP 서버 (server.py, weather.py)
 │
-└── 2_regional_service/        [Layer 2] 경북 폭염TF 현안 해결 서비스
-    ├── app.py                 대시보드 백엔드
-    ├── briefing.py            AI 상황 브리핑 — "오늘 어디부터 가라"
-    └── static/index.html      인터랙티브 지도 & 사각지대 시각화
+├── 2_regional_service/           # [Layer 2] 경북 폭염TF 현안 해결 서비스
+│   ├── app.py                    # Flask REST API 백엔드
+│   ├── briefing.py               # AI 상황 브리핑 생성
+│   ├── frontend/                 # Vite + React 18 SPA 대시보드
+│   └── static/                   # React 빌드 결과물
+│
+├── asgi.py                       # 통합 ASGI 서버 (Flask API + Remote MCP SSE)
+├── Dockerfile                    # Railway 클라우드 배포용 Docker 설정
+├── requirements.txt              # 전체 Python 의존성 목록
+└── README.md
 ```
 
-무거운 가공은 파이프라인이 미리 끝내고, 서버는 조회만 합니다.
-그래서 AI 클라이언트와 웹 대시보드가 **같은 데이터·같은 판단 근거**를 공유합니다.
+---
 
-## 무엇을 답할 수 있나
+## 🚀 빠른 시작
 
-MCP 서버를 Claude Desktop 등에 연결하면 자연어로 바로 질의할 수 있습니다.
+### 1. 의존성 설치
+```bash
+pip install -r requirements.txt
+```
 
-> "오늘 경북에서 가장 먼저 확인해야 할 읍·면 5곳은?"
-> "의성군 위험도가 왜 높아?"
-> "위험도는 높은데 담당 인력이 안 붙은 지역 알려줘"
+### 2. 데이터 파이프라인 빌드 & 테스트
+```bash
+python 1_data_infrastructure/pipeline/build.py         # 공공데이터 정규화 -> data/hosu.db
+pytest 1_data_infrastructure/pipeline/test_build.py    # 스코어링 회귀 테스트
+```
 
-점수만 던지지 않고 **왜 그 점수인지 근거를 함께 반환**합니다.
-담당 공무원이 검증할 수 없는 판단은 현장에서 쓰이지 않기 때문입니다.
+### 3. 로컬 서버 실행
+```bash
+# 통합 서버 (Flask REST + Remote MCP SSE)
+uvicorn asgi:app --port 5050 --reload
 
-## 자세한 문서
+# 또는 React 프론트엔드 개발 서버
+cd 2_regional_service/frontend && npm run dev
+```
 
-- [song/README.md](song/README.md) — 아키텍처, Tool 명세, 위험도 산출 방식, 데이터 출처
-- [song/1_data_infrastructure/README.md](song/1_data_infrastructure/README.md) — 데이터 인프라 상세
-- [song/2_regional_service/README.md](song/2_regional_service/README.md) — 대시보드 상세
+---
 
-## 라이선스
+## 🤖 AI 에이전트 연동 (Claude Desktop / Cursor)
 
-[MIT License](LICENSE) — 원본 공공데이터는 각 제공기관의 이용조건을 따릅니다.
+### 방법 1: 원격 URL 연동 (설치 불필요 ⭐)
+Claude Desktop 설정(`claude_desktop_config.json`)에 아래 한 줄만 추가하면 즉시 사용 가능합니다:
+
+```json
+{
+  "mcpServers": {
+    "hosu-heat-risk": {
+      "url": "https://hosu-backend-production.up.railway.app/sse"
+    }
+  }
+}
+```
+
+### 방법 2: 로컬 파이썬 연동
+```json
+{
+  "mcpServers": {
+    "hosu-heat-risk": {
+      "command": "python",
+      "args": [
+        "/절대경로/HOSU/1_data_infrastructure/mcp_server/server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/절대경로/HOSU/1_data_infrastructure:/절대경로/HOSU/1_data_infrastructure/mcp_server"
+      }
+    }
+  }
+}
+```
+
+---
+
+## 🛠️ 제공 MCP Tool 목록 (7종)
+
+| Tool | 설명 |
+|---|---|
+| `get_heat_risk_score(region)` | 특정 읍면동의 종합 폭염 위험도 점수 및 산출 근거 반환 |
+| `get_current_weather(region)` | 특정 지역의 실시간 기상 실측치(기온·습도·체감온도·위험단계) 조회 |
+| `list_high_priority_regions(top_n, level)` | 오늘 우선 대응이 필요한 위험 지역 TOP N 추출 |
+| `check_shelter_accessibility(region)` | 도보 5분권(400m) 내 무더위쉼터 접근성 및 사각지대 판별 |
+| `find_shelter_blind_spots(level)` | 관내 쉼터가 부족한 취약지역 목록 추출 |
+| `get_region_shelters(region, limit)` | 관내 등록된 무더위쉼터 위치, 수용인원, 냉방기기 스펙 목록 |
+| `explain_risk_calculation(region)` | 위험도 산출 공식(고령인구·쉼터접근성·온열질환이력·실시간기온) 및 가중치 설명 |

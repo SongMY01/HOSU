@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Build SQLite database from raw CSVs
-RUN python song/1_data_infrastructure/pipeline/build.py
+RUN python 1_data_infrastructure/pipeline/build.py
 
 # Expose port and run unified ASGI server (Flask REST + Remote MCP SSE)
 ENV PORT=5050

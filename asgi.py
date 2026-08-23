@@ -7,9 +7,9 @@ import os
 import sys
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(BASE_DIR, "song", "1_data_infrastructure"))
-sys.path.insert(0, os.path.join(BASE_DIR, "song", "1_data_infrastructure", "mcp_server"))
-sys.path.insert(0, os.path.join(BASE_DIR, "song", "2_regional_service"))
+sys.path.insert(0, os.path.join(BASE_DIR, "1_data_infrastructure"))
+sys.path.insert(0, os.path.join(BASE_DIR, "1_data_infrastructure", "mcp_server"))
+sys.path.insert(0, os.path.join(BASE_DIR, "2_regional_service"))
 
 from server import mcp
 from app import app as flask_app
