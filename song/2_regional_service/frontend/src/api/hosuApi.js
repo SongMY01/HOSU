@@ -1,4 +1,7 @@
-const BASE = '';
+// 개발: Vite 프록시가 /api → localhost:5050 처리
+// 배포: VITE_API_BASE=https://your-railway-app.railway.app 로 설정
+const BASE = import.meta.env.VITE_API_BASE || '';
+
 
 export async function fetchRegions(level = 'all') {
   const res = await fetch(`${BASE}/api/regions?level=${level}`);

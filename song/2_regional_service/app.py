@@ -13,6 +13,11 @@ import sqlite3
 from datetime import datetime
 
 from flask import Flask, jsonify, send_from_directory, request
+try:
+    from flask_cors import CORS
+    HAS_CORS = True
+except ImportError:
+    HAS_CORS = False
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(BASE_DIR)
@@ -27,7 +32,11 @@ import briefing
 
 app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"), static_url_path="/assets")
 
-DB_PATH = os.path.join(INFRA_DIR, "data", "hosu.db")
+# CORS: Vercel 프론트엔드에서 API 호출 허용
+if HAS_CORS:
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+DB_PATH = os.environ.get("DB_PATH") or os.path.join(INFRA_DIR, "data", "hosu.db")
 REALTIME_WEIGHT = 0.4
 
 
@@ -243,5 +252,8 @@ if __name__ == "__main__":
     if not os.path.exists(DB_PATH):
         print(f"⚠  {DB_PATH} 없음. 먼저 `python 1_data_infrastructure/pipeline/build.py`를 실행하세요.")
         exit(1)
-    print("🔥 HOSU 대시보드: http://localhost:5050")
-    app.run(debug=True, port=5050, host="0.0.0.0")
+    port = int(os.environ.get("PORT", 5050))
+    debug = os.environ.get("FLASK_DEBUG", "true").lower() == "true"
+    print(f"🔥 HOSU 대시보드: http://localhost:{port}")
+    app.run(debug=debug, port=port, host="0.0.0.0")
+
