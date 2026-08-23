@@ -1,11 +1,13 @@
 import { CircleMarker, Tooltip } from 'react-leaflet';
 import { riskColor } from '../../utils/risk';
+import { walkMin, isSigungu } from '../../utils/shelter';
 
-export default function RegionMarkers({ regions, onSelect }) {
+export default function RegionMarkers({ regions, onSelect, summary }) {
   return regions.map(r => {
     const color = riskColor(r.final_risk);
-    const rad = r.level === 'sigungu' ? 14 : 8;
-    const isBlind = !!r.is_blind_spot;
+    const rad = isSigungu(r) ? 14 : 8;
+    const isBlind = r.is_blind_spot === 1;
+    const dist = r.nearest_distance_m;
 
     return (
       <CircleMarker
@@ -27,6 +29,15 @@ export default function RegionMarkers({ regions, onSelect }) {
           <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>
             체감온도 {r.feels_like_c}°C ({r.temp_level})
           </div>
+          {/* 거리가 없으면 눈으로는 옆 마을과 구분되지 않아 판정이 자의적으로 보인다.
+              시군구의 거리는 자기 중심점이 아니라 관할 읍면동 평균이므로 그렇게 부른다. */}
+          {dist != null && (
+            <div style={{ fontSize: 10, color: isBlind ? '#c4b5fd' : '#9ca3af', marginTop: 2 }}>
+              {isSigungu(r) ? '읍면동 평균 쉼터 거리' : '가장 가까운 쉼터'}{' '}
+              {Math.round(dist).toLocaleString()}m · 도보 {walkMin(dist, summary)}분
+              {r.shelter_count ? ` · 관내 ${r.shelter_count}개` : ''}
+            </div>
+          )}
           {isBlind && (
             <div style={{ marginTop: 4 }}>
               <span style={{ background: 'rgba(168,85,247,.12)', color: '#a855f7', padding: '2px 6px', borderRadius: 4, fontSize: 9, fontWeight: 600 }}>

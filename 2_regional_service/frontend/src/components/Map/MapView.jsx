@@ -16,7 +16,7 @@ function FlyTo({ target }) {
   return null;
 }
 
-export default function MapView({ regions, shelters, showShelters, onSelectRegion, flyTarget }) {
+export default function MapView({ regions, shelters, showShelters, onSelectRegion, flyTarget, summary }) {
   return (
     <div className={styles.wrap}>
       <MapContainer
@@ -33,11 +33,11 @@ export default function MapView({ regions, shelters, showShelters, onSelectRegio
           subdomains="abcd"
           maxZoom={18}
         />
-        <RegionMarkers regions={regions} onSelect={onSelectRegion} />
+        <RegionMarkers regions={regions} onSelect={onSelectRegion} summary={summary} />
         {showShelters && <ShelterMarkers shelters={shelters} />}
         {flyTarget && <FlyTo target={flyTarget} />}
       </MapContainer>
-      <MapLegend />
+      <MapLegend summary={summary} />
     </div>
   );
 }

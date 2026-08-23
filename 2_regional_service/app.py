@@ -30,6 +30,11 @@ INFRA_DIR = os.path.join(ROOT_DIR, "1_data_infrastructure")
 sys.path.insert(0, os.path.join(INFRA_DIR, "mcp_server"))
 from weather import get_feels_like, temp_to_level, LEVEL_SCORE
 
+# 판정 기준은 파이프라인에서 가져온다. 화면이 값을 따로 들고 있으면 기준이 바뀔 때
+# 지도 라벨만 옛 숫자로 남는다. 프론트에는 /api/summary 로 실어 보낸다.
+sys.path.insert(0, os.path.join(INFRA_DIR, "pipeline"))
+from build import BLIND_SPOT_METERS, WALK_SPEED_M_PER_MIN
+
 sys.path.insert(0, BASE_DIR)
 import briefing
 
@@ -167,7 +172,7 @@ def load_regions(level="all"):
         if r.get("is_blind_spot"):
             reasons.append(
                 f"가장 가까운 무더위쉼터가 {r.get('nearest_distance_m') or 0:.0f}m "
-                f"(도보 {(r.get('nearest_distance_m') or 0)/80:.0f}분) — 도보권 밖"
+                f"(도보 {(r.get('nearest_distance_m') or 0)/WALK_SPEED_M_PER_MIN:.0f}분) — 도보권 밖"
             )
         if prof and prof["total_cases"] and (r.get("history_score") or 0) >= 60:
             reasons.append(
@@ -203,6 +208,10 @@ def summary_stats():
         "shelters_total": shelters,
         "avg_static_risk": round(avg_r, 1),
         "high_risk_count": high,
+        # 화면이 기준값을 직접 들고 있지 않도록 파이프라인 상수를 그대로 내려보낸다.
+        "walk_speed_m_per_min": WALK_SPEED_M_PER_MIN,
+        "blind_spot_m": BLIND_SPOT_METERS,
+        "blind_spot_walk_min": BLIND_SPOT_METERS // WALK_SPEED_M_PER_MIN,
     }
 
 

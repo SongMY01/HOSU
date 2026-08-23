@@ -34,7 +34,7 @@ def test_heat_illness_maps_all_sigungu():
 def test_eupmyeondong_inherits_sigungu_history():
     """읍면동 지역은 자기 시군구와 동일한 history_score를 가져야 한다(상속 로직 회귀 방지)."""
     regions = B.load_regions()
-    vuln = B.load_vulnerability()
+    vuln = B.load_vulnerability(regions)
     shelters = B.load_shelters()
     access = B.compute_shelter_access(regions, shelters)
     illness = B.load_heat_illness(regions)
@@ -48,7 +48,7 @@ def test_eupmyeondong_inherits_sigungu_history():
 
 def _all_scores():
     regions = B.load_regions()
-    vuln = B.load_vulnerability()
+    vuln = B.load_vulnerability(regions)
     shelters = B.load_shelters()
     access = B.compute_shelter_access(regions, shelters)
     illness = B.load_heat_illness(regions)
@@ -93,7 +93,7 @@ def test_scoring_uses_recent_years_only():
     assert len(years) > B.SCORING_YEARS, "전 기간이 적재되지 않았다면 이 구분 자체가 무의미"
 
     scores = {s["region_code"]: s for s in B.compute_static_scores(
-        regions, B.load_vulnerability(),
+        regions, B.load_vulnerability(regions),
         B.compute_shelter_access(regions, B.load_shelters()), illness)}
 
     # 최근 3년 밖 데이터만 있는 지역은 이력 점수가 0이어야 한다.
@@ -124,6 +124,20 @@ def test_excluded_sigungu_absent_and_all_surveyed():
     }
     assert not unsurveyed, f"쉼터 데이터가 없는 시군구: {unsurveyed}"
 
+    # 제외를 로더마다 따로 적으면 한 곳을 빠뜨린다 — 실제로 vulnerability에만 군위군
+    # 10개 행이 남아 FK 계약(REFERENCES regions)을 깨고 있었다. 로더별로 검사한다.
+    codes = {r["region_code"] for r in regions}
+    for name, rows in (("vulnerability", B.load_vulnerability(regions)),
+                       ("heat_illness", B.load_heat_illness(regions))):
+        orphans = {row["region_code"] for row in rows} - codes
+        assert not orphans, f"{name}에 regions 없는 고아 행: {sorted(orphans)}"
+
+    # 반대 방향도 잠근다. 고아 행을 버리도록 바꾼 뒤로는 population.csv의 코드 오타가
+    # '고아 행'이 아니라 '취약인구 없는 지역'이 되는데, 그러면 elderly 점수가 0으로
+    # 조용히 깔려 위험도만 낮아진다(실측 58.15 -> 41.75, 예외 없음).
+    missing = codes - {row["region_code"] for row in B.load_vulnerability(regions)}
+    assert not missing, f"취약인구 데이터가 없는 지역: {sorted(missing)}"
+
 
 def test_shelter_counts_are_per_region():
     """관내 쉼터 수가 지역별로 달라야 한다.
@@ -151,6 +165,57 @@ def test_blind_spot_is_not_almost_everything():
     blind = sum(1 for a in rows if a["is_blind_spot"])
     ratio = blind / len(rows)
     assert ratio < 0.25, f"읍면동의 {ratio:.0%}가 사각지대 - 판정 기준을 다시 볼 것"
+
+
+def test_sigungu_is_not_judged_and_aggregates_children():
+    """시군구 쉼터 지표는 판정이 아니라 관할 읍면동 집계여야 한다.
+
+    시군구 중심점 하나로 재면 수십 km짜리 행정구역을 점으로 취급하게 된다. 이 불변식이
+    깨지면(시군구가 다시 실제 판정을 갖게 되면) 어떤 테스트도 실패하지 않았다."""
+    regions = B.load_regions()
+    shelters = B.load_shelters()
+    access = {a["region_code"]: a for a in B.compute_shelter_access(regions, shelters)}
+
+    emd_by_sigungu = {}
+    for r in regions:
+        if r["level"] == "eupmyeondong":
+            emd_by_sigungu.setdefault(r["sigungu"], []).append(r["region_code"])
+
+    sigungu = [r for r in regions if r["level"] == "sigungu"]
+    assert sigungu, "시군구 행이 없으면 이 테스트는 무의미"
+
+    for r in sigungu:
+        a = access[r["region_code"]]
+        assert a["is_blind_spot"] is None, f"{r['sigungu']}: 시군구는 판정 단위가 아니다"
+
+        near = [access[c]["nearest_distance_m"] for c in emd_by_sigungu[r["sigungu"]]
+                if access[c]["nearest_distance_m"] is not None]
+        expected = round(sum(near) / len(near), 1) if near else None
+        assert a["nearest_distance_m"] == expected, (
+            f"{r['sigungu']}: 관할 읍면동 평균({expected})이 아님 - {a['nearest_distance_m']}")
+
+
+def test_sigungu_shelter_count_counts_each_shelter_once():
+    """시군구 관내 쉼터 수가 실제 쉼터 수를 넘지 않아야 한다.
+
+    중심점이 같은 행정동에 동점 배정을 하므로, 읍면동 카운트를 합치면 같은 쉼터가
+    여러 번 세어진다 — 이전엔 합계가 5,808로 실제 5,605보다 203건 많았다."""
+    regions = B.load_regions()
+    shelters = B.load_shelters()
+    access = {a["region_code"]: a for a in B.compute_shelter_access(regions, shelters)}
+
+    for r in regions:
+        if r["level"] != "sigungu":
+            continue
+        actual = sum(1 for s in shelters if B._same_sigungu(r["sigungu"], s["sigungu"]))
+        got = access[r["region_code"]]["shelter_count"]
+        assert got <= actual, f"{r['sigungu']}: 관내 {got}개인데 실제 쉼터는 {actual}개"
+
+    # 합계는 정확히 일치해야 한다. <= 로 두면 배정이 통째로 비는 회귀(전 시군구 0)를
+    # 놓친다 — 읍면동만 변별력이 있으면 다른 테스트도 통과해 버린다.
+    total = sum(access[r["region_code"]]["shelter_count"]
+                for r in regions if r["level"] == "sigungu")
+    assert total == len(shelters), f"시군구 합계 {total} != 실제 쉼터 {len(shelters)}"
 
 
 def test_blind_spot_matches_distance_rule():
@@ -235,5 +300,9 @@ if __name__ == "__main__":
     print("OK: 관내 쉼터 수가 지역별로 산출됨 (전국 총계 아님)")
     test_blind_spot_is_not_almost_everything()
     print("OK: 사각지대 비율이 변별력 있는 수준")
+    test_sigungu_is_not_judged_and_aggregates_children()
+    print("OK: 시군구는 사각지대 판정 없이 관할 읍면동 평균으로 집계됨")
+    test_sigungu_shelter_count_counts_each_shelter_once()
+    print("OK: 시군구 관내 쉼터 수가 쉼터당 1회만 계수됨")
     test_blind_spot_matches_distance_rule()
     print(f"OK: 사각지대가 최근접 거리 {B.BLIND_SPOT_METERS}m 기준과 정확히 일치")
