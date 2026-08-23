@@ -440,7 +440,7 @@
                 <div class="legend-item"><div class="ld" style="background:var(--risk-mid)"></div><span>보통 (35–54)</span></div>
                 <div class="legend-item"><div class="ld" style="background:var(--risk-low)"></div><span>낮음 (&lt;35)</span></div>
                 <div class="legend-div"></div>
-                <div class="legend-item"><div class="ld blind-s"></div><span>쉼터 사각지대</span></div>
+                <div class="legend-item"><div class="ld blind-s"></div><span>쉼터 사각지대 (도보 15분 초과)</span></div>
                 <div class="legend-div"></div>
                 <div class="legend-item"><div class="ld" style="background:#10b981;box-shadow:0 0 8px rgba(16,185,129,.6)"></div><span>무더위쉼터 (5,605개)</span></div>
             </div>
@@ -670,10 +670,19 @@
             let tags = '';
             if (r.is_blind_spot) tags += '<span class="tag blind">🏠 쉼터 사각</span>';
 
+            // 왜 사각지대인지 지도에서 바로 보이도록 최근접 거리를 함께 띄운다.
+            // 거리가 없으면 눈으로는 옆 마을과 구분되지 않아 판정이 자의적으로 보인다.
+            const d = r.nearest_distance_m;
+            const shelterLine = d == null ? '' :
+                `<div style="font-size:10px;color:${r.is_blind_spot?'#c4b5fd':'#9ca3af'};margin-top:2px">`
+                + `가장 가까운 쉼터 ${Math.round(d).toLocaleString()}m · 도보 ${Math.round(d/80)}분`
+                + `${r.shelter_count ? ` · 관내 ${r.shelter_count}개` : ''}</div>`;
+
             m.bindTooltip(`
                 <div class="tt-name">${r.region_name}</div>
                 <div class="tt-score" style="color:${color}">위험도 ${r.final_risk} · ${r.risk_grade}</div>
                 <div style="font-size:10px;color:#9ca3af;margin-top:2px">체감온도 ${r.feels_like_c}°C (${r.temp_level})</div>
+                ${shelterLine}
                 ${tags ? '<div class="tt-tags">'+tags+'</div>' : ''}
             `, { direction: 'top', offset: [0, -8] });
 
