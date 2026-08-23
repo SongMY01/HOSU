@@ -106,6 +106,25 @@ def test_scoring_uses_recent_years_only():
         assert scores[code]["history_score"] == 0, f"{code}: 최근 3년 밖인데 점수가 붙음"
 
 
+def test_excluded_sigungu_absent_and_all_surveyed():
+    """대상 지역이 최신 행정구역과 맞아야 한다.
+
+    군위군은 2023년 7월 대구광역시로 편입돼 경북 쉼터 목록에도, 최근 온열질환
+    집계에도 없다. 정적 출처인 행정구역·인구 파일에만 남아 있어 그대로 두면
+    쉼터·이력이 통째로 빈 10개 지역이 데이터 공백 탓에 위험도 상위권에 오른다."""
+    regions = B.load_regions()
+    leaked = {r["sigungu"] for r in regions} & B.EXCLUDED_SIGUNGU
+    assert not leaked, f"제외 대상이 적재됨: {leaked}"
+
+    # 남은 시군구는 전부 쉼터 데이터가 있어야 '쉼터 없음'과 '미조사'가 구분된다.
+    shelters = B.load_shelters()
+    unsurveyed = {
+        r["sigungu"] for r in regions
+        if not any(B._same_sigungu(r["sigungu"], s["sigungu"]) for s in shelters)
+    }
+    assert not unsurveyed, f"쉼터 데이터가 없는 시군구: {unsurveyed}"
+
+
 def test_shelter_counts_are_per_region():
     """관내 쉼터 수가 지역별로 달라야 한다.
 
@@ -210,6 +229,8 @@ if __name__ == "__main__":
     print("OK: 온열질환 연령대 보존 + 키 중복 없음")
     test_region_coords_within_parent_sigungu()
     print(f"OK: 모든 읍면동 중심점이 소속 시군구 {B.MAX_EMD_DISTANCE_KM}km 이내")
+    test_excluded_sigungu_absent_and_all_surveyed()
+    print("OK: 경북 아닌 지역 제외됨 + 모든 시군구에 쉼터 데이터 있음")
     test_shelter_counts_are_per_region()
     print("OK: 관내 쉼터 수가 지역별로 산출됨 (전국 총계 아님)")
     test_blind_spot_is_not_almost_everything()

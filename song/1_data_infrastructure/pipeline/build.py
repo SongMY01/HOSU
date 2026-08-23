@@ -33,6 +33,12 @@ SCORING_YEARS = 3       # 위험도 점수에 반영할 온열질환 최근 연�
 MAX_EMD_DISTANCE_KM = 60  # 읍면동 중심점이 소속 시군구에서 이보다 멀면 좌표 오류로 본다
                           # (경북 실측 정상 최대 29.5km, 발견된 오류는 147km)
 
+# 이 서비스의 대상은 경상북도다. 군위군은 2023년 7월 1일 대구광역시로 편입돼
+# 더 이상 경북이 아니다 — 실제로 경북 쉼터 목록에 없고(0건), 온열질환 집계도
+# 2022년에서 끊긴다. 정적 출처인 행정구역·인구 파일에만 남아 있어, 그대로 두면
+# 쉼터·이력이 통째로 빈 10개 지역이 데이터 공백 때문에 위험도 상위권에 오른다.
+EXCLUDED_SIGUNGU = {"군위군"}
+
 # 정적 위험도 가중치 (합 1.0). 농업인 비율(0.25) 제거 후 나머지에 비례 재배분.
 WEIGHTS = {
     "elderly": 0.47,   # 고령인구 비율 (초고령 쏠림 보정 포함, ELDERLY_SKEW_MAX_ADJ 참고)
@@ -153,9 +159,13 @@ def load_regions():
     """행정구역 마스터. 실제로는 행정표준코드 + SGIS 경계 중심점."""
     rows = read_csv("regions.csv")
     out = []
+    excluded = 0
     for r in rows:
         if r["level"] not in ("sigungu", "eupmyeondong"):
             continue  # 도(道) 전체 대표행 등은 분석 단위가 아니므로 제외 (schema.sql 계약과 일치)
+        if r["sigungu"] in EXCLUDED_SIGUNGU:
+            excluded += 1
+            continue
         lat, lon = float(r["lat"]), float(r["lon"])
         nx, ny = latlon_to_kma_grid(lat, lon)
         out.append({
@@ -167,6 +177,8 @@ def load_regions():
             "lat": lat, "lon": lon,
             "kma_nx": nx, "kma_ny": ny,
         })
+    if excluded:
+        print(f"      경북 아님으로 제외: {sorted(EXCLUDED_SIGUNGU)} ({excluded}개 행)")
     check_region_coords(out)
     return out
 
@@ -269,6 +281,8 @@ def load_heat_illness(regions):
         if not r["나이"].strip().isdigit():
             skipped_no_age += 1
             continue
+        if sgg in EXCLUDED_SIGUNGU:
+            continue  # 대상 지역이 아니므로 조용히 건너뛴다(매핑 실패가 아님)
         code = code_by_sigungu.get(sgg)
         if code is None:
             unmapped.add(sgg)
@@ -422,20 +436,22 @@ def compute_shelter_access(regions, shelters):
     now = datetime.now(timezone.utc).isoformat()
     counts = assign_shelters_to_regions(regions, shelters)
 
-    # 원본 쉼터 목록에 아예 등장하지 않는 시군구는 '쉼터가 없다'가 아니라 '조사되지
-    # 않았다'로 봐야 한다. 실제로 군위군은 2023년 대구광역시로 편입돼 경북 쉼터
-    # 목록에서 빠졌을 뿐인데, 이를 사각지대로 단정하면 없는 사실을 만들어낸다.
+    # 쉼터 목록에 아예 없는 시군구가 남아 있으면 '쉼터가 없다'와 '조사되지 않았다'를
+    # 구분할 수 없다. 대상 지역이 최신 행정구역과 어긋났다는 신호이므로 경고한다.
     surveyed = {
         reg["sigungu"] for reg in regions
         if any(_same_sigungu(reg["sigungu"], s["sigungu"]) for s in shelters)
     }
     unsurveyed = {reg["sigungu"] for reg in regions} - surveyed
     if unsurveyed:
-        print(f"      쉼터 데이터 없는 시군구(사각지대 판정 제외): {sorted(unsurveyed)}")
+        print(f"      경고: 쉼터 데이터가 없는 시군구 {sorted(unsurveyed)} — "
+              f"관할 구역이 맞는지 확인 필요")
 
     out = []
     for reg in regions:
-        # 최근접 거리는 시군구 경계를 넘어도 의미가 있다(이웃 마을 쉼터로 걸어갈 수 있음).
+        if reg["level"] == "sigungu":
+            continue  # 관할 읍면동을 집계해 아래에서 따로 만든다
+        # 최근접 거리는 행정구역 경계를 넘어도 의미가 있다(이웃 마을 쉼터로 걸어갈 수 있음).
         dists = [haversine_m(reg["lat"], reg["lon"], s["lat"], s["lon"]) for s in shelters]
         nearest = min(dists) if dists else None
         blind = (None if reg["sigungu"] in unsurveyed
@@ -446,6 +462,28 @@ def compute_shelter_access(regions, shelters):
             "within_400m_count": sum(1 for d in dists if d <= WALK_5MIN_METERS),
             "nearest_distance_m": round(nearest, 1) if nearest else None,
             "is_blind_spot": blind,
+            "updated_at": now,
+        })
+
+    # 시군구는 관할 읍면동의 집계로 만든다. 시군구 중심점 하나로 재면 수십 km짜리
+    # 행정구역을 점 하나로 취급하게 되어, 그 점이 우연히 쉼터 근처면 접근성이 좋다고
+    # 나온다 — 실제로 관내 쉼터 126개인 울진군이 사각지대로, 201개인 상주시가
+    # 쉼터점수 100으로 찍혔다. 고령인구·온열질환과 달리 쉼터 접근성은 위치 의존적이라
+    # 시군구 자체 좌표로는 계산할 수 없다.
+    by_code = {a["region_code"]: a for a in out}
+    for reg in regions:
+        if reg["level"] != "sigungu":
+            continue
+        children = [by_code[r["region_code"]] for r in regions
+                    if r["level"] == "eupmyeondong" and r["sigungu"] == reg["sigungu"]]
+        near = [c["nearest_distance_m"] for c in children if c["nearest_distance_m"] is not None]
+        out.append({
+            "region_code": reg["region_code"],
+            "shelter_count": counts[reg["region_code"]],
+            "within_400m_count": sum(c["within_400m_count"] for c in children),
+            "nearest_distance_m": round(sum(near) / len(near), 1) if near else None,
+            # 사각지대는 마을 단위 개념이다. 시군구는 판정 단위가 아니므로 비워 둔다.
+            "is_blind_spot": None,
             "updated_at": now,
         })
     return out
@@ -492,9 +530,7 @@ def compute_static_scores(regions, vuln, access, illness):
         rel = max(-1.0, min(1.0, (skew - skew_baseline) / skew_baseline)) if skew_baseline else 0.0
         es = min(100.0, e65 * 100.0 * (1 + ELDERLY_SKEW_MAX_ADJ * rel))
 
-        # 쉼터 점수: 최근접 거리가 멀수록, 관내에 쉼터가 없을수록 높음.
-        # 가산점 기준을 within_400m_count에서 관내 배치 여부로 바꿨다 — 중심점 400m
-        # 기준은 읍면동의 69%가 해당돼 변별력이 없었다(compute_shelter_access 참고).
+        # 쉼터 점수: 최근접 거리가 멀수록, 도보권 밖이면 가산.
         dist = a.get("nearest_distance_m") or 2000.0
         ss = min(100.0, (dist / 2000.0) * 70.0
                  + (30.0 if a.get("is_blind_spot") else 0.0))
@@ -511,12 +547,34 @@ def compute_static_scores(regions, vuln, access, illness):
 
         out.append({
             "region_code": code,
+            "level": reg["level"],
+            "sigungu": reg["sigungu"],
             "elderly_score": round(es, 2),
             "shelter_score": round(ss, 2),
             "history_score": round(hs, 2),
             "static_total": round(total, 2),
             "computed_at": now,
         })
+
+    # 시군구의 쉼터 점수는 관할 읍면동 평균으로 다시 쓴다. 고령인구·온열질환은 시군구
+    # 자체 실데이터라 그대로 두지만, 쉼터 접근성만은 위치 의존적이라 시군구 중심점
+    # 하나로 계산하면 그 점이 어디 떨어지느냐에 좌우된다(상주시 +15.8, 경주시 -15.6).
+    for row in out:
+        if row["level"] != "sigungu":
+            continue
+        kids = [r["shelter_score"] for r in out
+                if r["level"] == "eupmyeondong" and r["sigungu"] == row["sigungu"]]
+        if not kids:
+            continue
+        row["shelter_score"] = round(sum(kids) / len(kids), 2)
+        row["static_total"] = round(
+            row["elderly_score"] * WEIGHTS["elderly"]
+            + row["shelter_score"] * WEIGHTS["shelter"]
+            + row["history_score"] * WEIGHTS["history"], 2)
+
+    for row in out:  # 스키마에 없는 보조 키 제거
+        row.pop("level", None)
+        row.pop("sigungu", None)
     return out
 
 
