@@ -13,8 +13,6 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showShelters, setShowShelters] = useState(false);
   const [shelters, setShelters] = useState([]);
-  const [globalShelters, setGlobalShelters] = useState([]);
-  const [isAreaMode, setIsAreaMode] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState(null);
   const [flyTarget, setFlyTarget] = useState(null);
 
@@ -30,50 +28,33 @@ export default function App() {
     );
   }, [regions, searchQuery]);
 
-  // Load all global shelters (up to 6,000)
-  const fetchAllShelters = useCallback(async () => {
-    if (globalShelters.length > 0) {
-      setShelters(globalShelters);
-      return globalShelters;
-    }
-    try {
-      const data = await fetchShelters({ limit: 6000 });
-      const list = data.shelters || [];
-      setGlobalShelters(list);
-      setShelters(list);
-      return list;
-    } catch (e) {
-      console.error('전체 쉼터 로드 실패:', e);
-      return [];
-    }
-  }, [globalShelters]);
-
-  // Toggle shelter layer from Header
+  // Toggle shelter layer
   const handleShelterToggle = useCallback(async () => {
-    // 1. 관내 쉼터만 띄워진 상태에서 상단 버튼을 누른 경우 -> 전역 전체 쉼터로 전환
-    if (showShelters && isAreaMode) {
-      setIsAreaMode(false);
-      await fetchAllShelters();
-      return;
+    const next = !showShelters;
+    setShowShelters(next);
+    if (next && shelters.length === 0) {
+      try {
+        const data = await fetchShelters({ limit: 2000 });
+        setShelters(data.shelters);
+      } catch (e) {
+        console.error('쉼터 로드 실패:', e);
+      }
     }
+  }, [showShelters, shelters]);
 
-    // 2. 이미 전체 쉼터가 켜진 상태 -> 끄기
-    if (showShelters && !isAreaMode) {
-      setShowShelters(false);
-      return;
-    }
+  // Select region from map click or sidebar
+  const handleSelectRegion = useCallback((regionOrCode) => {
+    const r = typeof regionOrCode === 'string'
+      ? regions.find(x => x.region_code === regionOrCode)
+      : regionOrCode;
+    if (!r) return;
+    setSelectedRegion(r);
+    setFlyTarget({ lat: r.lat, lon: r.lon, zoom: r.level === 'sigungu' ? 11 : 13 });
+  }, [regions]);
 
-    // 3. 꺼진 상태 -> 켜고 전체 쉼터 로드
-    setShowShelters(true);
-    setIsAreaMode(false);
-    await fetchAllShelters();
-  }, [showShelters, isAreaMode, fetchAllShelters]);
-
-  // Show specific area shelters from DetailPanel
   const handleShowAreaShelters = useCallback((newShelters, target) => {
     setShelters(newShelters);
     setShowShelters(true);
-    setIsAreaMode(true);
     if (target) {
       setFlyTarget(target);
     }
