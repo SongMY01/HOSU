@@ -10,7 +10,10 @@ HOSU TF 대시보드 서버
 import os
 import sys
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+
+KST = timezone(timedelta(hours=9))
+
 
 from flask import Flask, jsonify, send_from_directory, request
 try:
@@ -180,7 +183,7 @@ def load_regions(level="all"):
 def api_regions():
     """모든 지역의 위험도·좌표·사각지대 정보를 반환."""
     rows = load_regions(request.args.get("level", "all"))
-    return jsonify({"as_of": datetime.now().isoformat(timespec="seconds"),
+    return jsonify({"as_of": datetime.now(KST).strftime("%Y-%m-%d %H:%M"),
                     "count": len(rows), "regions": rows})
 
 
@@ -212,7 +215,8 @@ def api_summary():
 def api_briefing():
     """오늘의 AI 상황 브리핑. 키가 없거나 호출이 실패하면 규칙 기반 문장으로 degrade한다."""
     result = briefing.generate(load_regions("all"), summary_stats())
-    return jsonify({"as_of": datetime.now().isoformat(timespec="seconds"), **result})
+    return jsonify({"as_of": datetime.now(KST).strftime("%Y-%m-%d %H:%M"), **result})
+
 
 
 @app.route("/api/shelters")

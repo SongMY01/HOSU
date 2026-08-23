@@ -13,11 +13,20 @@ MCP 서버와 대시보드가 호출 시점에 현재 날짜/시간 기준으로
 import math
 import os
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import unquote
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# 한국 표준시 (KST, UTC+9)
+KST = timezone(timedelta(hours=9))
+
+
+def now_kst() -> datetime:
+    """현재 한국 표준시 반환."""
+    return datetime.now(KST)
+
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -54,8 +63,8 @@ def calc_feels_like(temp_c: float, humidity_pct: float) -> float:
 
 
 def _compute_current_weather(nx: int, ny: int) -> dict:
-    """현재 날짜/시간(datetime.now())을 반영한 동적 기상 시뮬레이션 산출."""
-    now = datetime.now()
+    """현재 날짜/시간(now_kst())을 반영한 동적 기상 시뮬레이션 산출."""
+    now = now_kst()
     hour = now.hour
     month = now.month
 
@@ -96,7 +105,7 @@ def _fetch_kma_realtime(nx: int, ny: int) -> dict | None:
     if not KMA_API_KEY:
         return None
 
-    now = datetime.now()
+    now = now_kst()
     base = now - timedelta(minutes=40)  # 실황은 매시 40분 이후 제공
     params = {
         "serviceKey": KMA_API_KEY,
@@ -137,7 +146,7 @@ def _fetch_kma_realtime(nx: int, ny: int) -> dict | None:
 def get_weather_details(nx: int, ny: int, region_code: str = None, sigungu: str = None, eupmyeondong: str = None) -> dict:
     """현재 날짜 및 시간 기준의 상세 기상 정보(기온, 습도, 체감온도, 발표시각)를 반환."""
     key = (nx, ny)
-    now = datetime.now()
+    now = now_kst()
 
     if key in _cache:
         ts, data = _cache[key]
