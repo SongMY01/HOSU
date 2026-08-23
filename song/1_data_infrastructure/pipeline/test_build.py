@@ -106,6 +106,50 @@ def test_scoring_uses_recent_years_only():
         assert scores[code]["history_score"] == 0, f"{code}: 최근 3년 밖인데 점수가 붙음"
 
 
+def test_shelter_counts_are_per_region():
+    """관내 쉼터 수가 지역별로 달라야 한다.
+
+    이전에는 전 지역이 전국 총계(5,605)로 채워져 있었다 — 화면에 '관내 쉼터 5605개'가
+    떠도 예외가 안 나서 눈으로만 발견되는 오류였다."""
+    regions = B.load_regions()
+    access = B.compute_shelter_access(regions, B.load_shelters())
+    counts = {a["shelter_count"] for a in access}
+    assert len(counts) > 1, f"관내 쉼터 수가 전 지역 동일: {counts}"
+
+    total = len(B.load_shelters())
+    assert max(counts) < total, f"한 지역이 전체 쉼터({total})를 다 가짐 - 배정이 안 됨"
+
+
+def test_blind_spot_is_not_almost_everything():
+    """사각지대가 대다수면 우선순위를 가릴 수 없다.
+
+    중심점 400m 기준일 때 69%가 사각지대로 나와 지표가 무의미했다. 정의를
+    '관내 쉼터 0개'로 바꾼 뒤의 회귀 방지."""
+    regions = B.load_regions()
+    access = B.compute_shelter_access(regions, B.load_shelters())
+    emd = {r["region_code"] for r in regions if r["level"] == "eupmyeondong"}
+    rows = [a for a in access if a["region_code"] in emd]
+    blind = sum(1 for a in rows if a["is_blind_spot"])
+    ratio = blind / len(rows)
+    assert ratio < 0.25, f"읍면동의 {ratio:.0%}가 사각지대 - 판정 기준을 다시 볼 것"
+
+
+def test_shelterless_region_has_distant_nearest():
+    """관내 쉼터가 없다고 판정된 곳은 최근접 거리도 도보권 밖이어야 자연스럽다.
+    바로 옆에 쉼터가 있는데 사각지대로 찍히면 배정 로직이 어긋난 것이다."""
+    regions = B.load_regions()
+    access = {a["region_code"]: a for a in B.compute_shelter_access(regions, B.load_shelters())}
+    rmap = {r["region_code"]: r for r in regions}
+
+    too_close = [
+        (rmap[c]["sigungu"], rmap[c]["eupmyeondong"], a["nearest_distance_m"])
+        for c, a in access.items()
+        if a["is_blind_spot"] and rmap[c]["level"] == "eupmyeondong"
+        and (a["nearest_distance_m"] or 0) < B.WALK_5MIN_METERS
+    ]
+    assert not too_close, f"쉼터가 도보권에 있는데 사각지대로 판정됨: {too_close}"
+
+
 def test_region_coords_within_parent_sigungu():
     """모든 읍면동 중심점이 소속 시군구 근처에 있어야 한다.
 
@@ -161,3 +205,9 @@ if __name__ == "__main__":
     print("OK: 온열질환 연령대 보존 + 키 중복 없음")
     test_region_coords_within_parent_sigungu()
     print(f"OK: 모든 읍면동 중심점이 소속 시군구 {B.MAX_EMD_DISTANCE_KM}km 이내")
+    test_shelter_counts_are_per_region()
+    print("OK: 관내 쉼터 수가 지역별로 산출됨 (전국 총계 아님)")
+    test_blind_spot_is_not_almost_everything()
+    print("OK: 사각지대 비율이 변별력 있는 수준")
+    test_shelterless_region_has_distant_nearest()
+    print("OK: 도보권에 쉼터가 있는데 사각지대로 찍힌 곳 없음")

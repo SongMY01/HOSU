@@ -317,24 +317,92 @@ def load_weather(regions):
 
 # ---------------------------------------------------------------- compute
 
+def _same_sigungu(region_sigungu, shelter_sigungu):
+    """쉼터 데이터의 시군구명과 행정구역 시군구명을 맞춘다.
+
+    쉼터 원본은 포항시를 구로 나누지 않아 '포항시'로 오는데, 행정구역은
+    '포항시 남구'/'포항시 북구'로 갈린다. 접두 일치로 이 한 케이스를 흡수한다.
+    """
+    return (region_sigungu == shelter_sigungu
+            or region_sigungu.startswith(shelter_sigungu + " ")
+            or shelter_sigungu.startswith(region_sigungu + " "))
+
+
+def assign_shelters_to_regions(regions, shelters):
+    """각 쉼터를 소속 시군구 안에서 가장 가까운 읍면동에 배정해 관내 쉼터 수를 센다.
+
+    읍면동 경계 데이터가 없으므로 '같은 시군구 + 최근접 중심점'으로 관내 여부를
+    근사한다. 시군구는 원본에 실제로 있는 값이라, 경계를 통째로 추측하는 것보다
+    훨씬 안전하다.
+
+    중심점이 완전히 같은 행정동들(상대1동·상대2동·상대동 등 25개 그룹)은 물리적으로
+    같은 위치이므로 접근성도 같다 — 한 곳만 골라 나머지를 0개로 만들면 실제로는 없는
+    격차를 만들어내므로 동점은 모두에게 배정한다.
+    """
+    emd = [r for r in regions if r["level"] == "eupmyeondong"]
+    counts = {r["region_code"]: 0 for r in regions}
+
+    for s in shelters:
+        cands = [r for r in emd if _same_sigungu(r["sigungu"], s["sigungu"])]
+        if not cands:
+            continue
+        dists = [(haversine_m(r["lat"], r["lon"], s["lat"], s["lon"]), r) for r in cands]
+        nearest = min(d for d, _ in dists)
+        for d, r in dists:
+            if d <= nearest + 1e-6:
+                counts[r["region_code"]] += 1
+
+    # 시군구 행은 관할 읍면동의 합으로 집계한다(자기 중심점 기준이 아니라).
+    for r in regions:
+        if r["level"] == "sigungu":
+            counts[r["region_code"]] = sum(
+                counts[e["region_code"]] for e in emd if e["sigungu"] == r["sigungu"]
+            )
+    return counts
+
+
 def compute_shelter_access(regions, shelters):
-    """지역 중심점 기준 도보권(400m) 내 쉼터 수 계산."""
+    """관내 무더위쉼터 배치 현황과 중심점 기준 접근성을 계산한다.
+
+    사각지대 = 관내에 지정된 쉼터가 없고, 이웃 마을 쉼터까지도 걸어갈 수 없는 곳.
+    두 조건을 모두 봐야 한다.
+
+    - 중심점 400m만 보면: 400m는 원래 '주민 집 → 쉼터' 거리인데 읍면동 중심점(몇 km
+      범위의 기하학적 중심)에 적용돼, 마을이 잘 커버돼도 사각지대로 찍힌다(69% 해당).
+    - 관내 배치만 보면: 도심 동은 촘촘해서 바로 옆 쉼터가 이웃 동에 배정된다.
+      실제로 경주시 황오동은 288m 거리에 쉼터가 있는데도 관내 0개였다.
+
+    걸어갈 수 있으면 행정구역이 달라도 사각지대가 아니다.
+    within_400m_count는 '마을 중심에서 도보 5분 내'라는 별개 지표로 계속 제공한다.
+    """
     now = datetime.now(timezone.utc).isoformat()
+    counts = assign_shelters_to_regions(regions, shelters)
+
+    # 원본 쉼터 목록에 아예 등장하지 않는 시군구는 '쉼터가 없다'가 아니라 '조사되지
+    # 않았다'로 봐야 한다. 실제로 군위군은 2023년 대구광역시로 편입돼 경북 쉼터
+    # 목록에서 빠졌을 뿐인데, 이를 사각지대로 단정하면 없는 사실을 만들어낸다.
+    surveyed = {
+        reg["sigungu"] for reg in regions
+        if any(_same_sigungu(reg["sigungu"], s["sigungu"]) for s in shelters)
+    }
+    unsurveyed = {reg["sigungu"] for reg in regions} - surveyed
+    if unsurveyed:
+        print(f"      쉼터 데이터 없는 시군구(사각지대 판정 제외): {sorted(unsurveyed)}")
+
     out = []
     for reg in regions:
-        dists = [
-            haversine_m(reg["lat"], reg["lon"], s["lat"], s["lon"])
-            for s in shelters
-        ]
-        count = len(dists)
-        w400 = sum(1 for d in dists if d <= 400.0)
+        # 최근접 거리는 시군구 경계를 넘어도 의미가 있다(이웃 마을 쉼터로 걸어갈 수 있음).
+        dists = [haversine_m(reg["lat"], reg["lon"], s["lat"], s["lon"]) for s in shelters]
         nearest = min(dists) if dists else None
+        in_region = counts[reg["region_code"]]
+        walkable = nearest is not None and nearest <= WALK_5MIN_METERS
+        blind = None if reg["sigungu"] in unsurveyed else int(in_region == 0 and not walkable)
         out.append({
             "region_code": reg["region_code"],
-            "shelter_count": count,
-            "within_400m_count": w400,
+            "shelter_count": in_region,
+            "within_400m_count": sum(1 for d in dists if d <= WALK_5MIN_METERS),
             "nearest_distance_m": round(nearest, 1) if nearest else None,
-            "is_blind_spot": 1 if w400 == 0 else 0,
+            "is_blind_spot": blind,
             "updated_at": now,
         })
     return out
@@ -381,10 +449,12 @@ def compute_static_scores(regions, vuln, access, illness):
         rel = max(-1.0, min(1.0, (skew - skew_baseline) / skew_baseline)) if skew_baseline else 0.0
         es = min(100.0, e65 * 100.0 * (1 + ELDERLY_SKEW_MAX_ADJ * rel))
 
-        # 쉼터 점수: 최근접 거리가 멀수록, 도보권 쉼터가 적을수록 높음
+        # 쉼터 점수: 최근접 거리가 멀수록, 관내에 쉼터가 없을수록 높음.
+        # 가산점 기준을 within_400m_count에서 관내 배치 여부로 바꿨다 — 중심점 400m
+        # 기준은 읍면동의 69%가 해당돼 변별력이 없었다(compute_shelter_access 참고).
         dist = a.get("nearest_distance_m") or 2000.0
-        w400 = a.get("within_400m_count") or 0
-        ss = min(100.0, (dist / 2000.0) * 70.0 + (30.0 if w400 == 0 else 0.0))
+        ss = min(100.0, (dist / 2000.0) * 70.0
+                 + (30.0 if a.get("is_blind_spot") else 0.0))
 
         # 과거 이력 점수. 원본이 시군구 단위까지만 있어 읍면동은 소속 시군구 값을 상속.
         cases = imap.get(code)
@@ -466,8 +536,8 @@ def main():
     print("[3/6] 쉼터 도보권 접근성 계산")
     shelters = load_shelters()
     access = compute_shelter_access(regions, shelters)
-    blind = sum(a["is_blind_spot"] for a in access)
-    print(f"      쉼터 {len(shelters)}곳 / 도보권 사각지대 {blind}개 지역")
+    blind = sum(1 for a in access if a["is_blind_spot"])
+    print(f"      쉼터 {len(shelters)}곳 / 관내 쉼터 없고 도보권에도 없는 지역 {blind}곳")
 
     print("[4/6] 실시간 기상 실측 데이터 로드 (gyeongbuk_weather.csv)")
     weather = load_weather(regions)

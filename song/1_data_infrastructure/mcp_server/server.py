@@ -163,8 +163,8 @@ def get_heat_risk_score(region: str) -> dict:
         basis = f" ({v['base_year']}년 기준)" if v.get("base_year") else ""
         reasons.append(f"65세 이상 인구비율 {v.get('elderly_ratio', 0) * 100:.1f}%{basis}")
     if acc.get("is_blind_spot"):
-        reasons.append(f"도보 5분권(400m) 무더위쉼터 없음 — "
-                       f"최근접 {acc.get('nearest_distance_m', 0):.0f}m")
+        reasons.append(f"관내에 지정된 무더위쉼터 없음 — "
+                       f"최근접 쉼터까지 {acc.get('nearest_distance_m', 0):.0f}m")
     if prof and prof["total_cases"] and s["history_score"] >= 60:
         reasons.append(f"{r['sigungu']} 누적 온열질환 {prof['total_cases']}건 "
                        f"({prof['from_year']}~{prof['to_year']}, 시군구 단위 집계) 중 "
@@ -279,7 +279,9 @@ def get_shelter_coverage(region: str) -> dict:
         "shelter_count": a["shelter_count"],
         "within_400m_count": a["within_400m_count"],
         "nearest_distance_m": a["nearest_distance_m"],
-        "is_blind_spot": bool(a["is_blind_spot"]),
+        # NULL은 '쉼터가 있다'가 아니라 '해당 시군구가 쉼터 조사에 포함되지 않았다'는 뜻이라
+        # False로 뭉개지 않고 그대로 넘긴다.
+        "is_blind_spot": None if a["is_blind_spot"] is None else bool(a["is_blind_spot"]),
         "note": "도보 5분(400m) 내 쉼터가 없으면 사각지대로 판정",
     }
 

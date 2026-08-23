@@ -150,7 +150,8 @@ def load_regions(level="all"):
             )
         if r.get("is_blind_spot"):
             reasons.append(
-                f"도보 5분권(400m) 무더위쉼터 없음 — 최근접 {r.get('nearest_distance_m') or 0:.0f}m"
+                f"관내에 지정된 무더위쉼터 없음 — 최근접 쉼터까지 "
+                f"{r.get('nearest_distance_m') or 0:.0f}m"
             )
         if prof and prof["total_cases"] and (r.get("history_score") or 0) >= 60:
             reasons.append(
