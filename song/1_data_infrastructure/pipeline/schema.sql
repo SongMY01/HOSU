@@ -37,13 +37,18 @@ CREATE TABLE IF NOT EXISTS shelter_access (
     updated_at         TEXT
 );
 
--- 4. 온열질환 발생 이력 (일 단위 갱신, 시군구 해상도)
+-- 4. 온열질환 발생 이력 (시군구 × 연도 × 연령대 해상도)
+-- 연령대가 PK에 포함돼야 한다. 원본이 (지역,연도,연령대)별 집계라 PK가 (region_code, year)
+-- 뿐이면 같은 해의 다른 연령대 행이 통째로 유실된다.
+-- 위험도 점수는 최근 3년만 쓰고(최근 경향 반영), 화면 표기는 전체 누적을 쓴다 —
+-- 둘 다 이 한 테이블에서 질의로 파생시킨다.
 CREATE TABLE IF NOT EXISTS heat_illness_history (
     region_code    TEXT REFERENCES regions(region_code),
     year           INTEGER,
-    case_count     INTEGER,               -- 연간 온열질환자 수
+    age_group      TEXT NOT NULL,         -- '10대 미만' | '10대' ... | '80대 이상'
+    case_count     INTEGER,               -- 해당 연도·연령대 온열질환자 수
     death_count    INTEGER,
-    PRIMARY KEY (region_code, year)
+    PRIMARY KEY (region_code, year, age_group)
 );
 
 -- 5. 사전계산된 정적 위험도 점수 (파이프라인 산출물)
@@ -99,6 +104,7 @@ CREATE TABLE IF NOT EXISTS realtime_weather (
 );
 
 CREATE INDEX IF NOT EXISTS idx_regions_sigungu ON regions(sigungu);
+CREATE INDEX IF NOT EXISTS idx_illness_region ON heat_illness_history(region_code);
 CREATE INDEX IF NOT EXISTS idx_static_total ON static_risk_scores(static_total DESC);
 CREATE INDEX IF NOT EXISTS idx_shelters_sigungu ON shelters(sigungu);
 CREATE INDEX IF NOT EXISTS idx_shelters_lat_lon ON shelters(lat, lon);

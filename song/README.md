@@ -27,8 +27,12 @@ song/
 │
 └── 2_regional_service/           # [Layer 2] 경북 폭염TF 현안 해결 서비스
     ├── app.py                    # 대시보드 백엔드 서버
+    ├── briefing.py               # AI 상황 브리핑 (Claude API)
     └── static/index.html         # 인터랙티브 지도 & 사각지대 시각화 UI
 ```
+
+> **API 키 의존은 Layer 2에만 있습니다.** Layer 1(데이터 인프라·MCP 서버)은
+> 키 없이 완전히 동작하며, AI 브리핑도 키가 없으면 규칙 기반 문장으로 대체됩니다.
 
 ---
 

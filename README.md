@@ -45,6 +45,7 @@ song/
 │
 └── 2_regional_service/        [Layer 2] 경북 폭염TF 현안 해결 서비스
     ├── app.py                 대시보드 백엔드
+    ├── briefing.py            AI 상황 브리핑 — "오늘 어디부터 가라"
     └── static/index.html      인터랙티브 지도 & 사각지대 시각화
 ```
 

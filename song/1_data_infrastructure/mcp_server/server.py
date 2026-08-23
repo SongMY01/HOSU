@@ -91,6 +91,31 @@ def region_label(r):
     return f"{r['sigungu']} {r['eupmyeondong']}" if r["eupmyeondong"] else r["sigungu"]
 
 
+def illness_profile(region_code):
+    """해당 지역이 속한 시군구의 온열질환 누적 프로파일.
+
+    위험도 점수는 최근 3년만 반영하지만(build.py), 근거로 제시할 때는 전 기간 누적을
+    쓴다 — 표본이 클수록 설명이 단단하다. 원본이 시군구 단위라 읍면동은 부모 값을 본다.
+    실제 집계 연도 범위를 함께 반환해 기간을 정직하게 표기할 수 있게 한다.
+    """
+    rows = q("""
+        SELECT SUM(case_count) total,
+               SUM(CASE WHEN age_group = '80대 이상' THEN case_count ELSE 0 END) elderly_cases,
+               MIN(year) from_year, MAX(year) to_year
+        FROM heat_illness_history WHERE region_code = ?
+    """, (region_code[:5] + "00000",))
+    if not rows or not rows[0]["total"]:
+        return None
+    x = rows[0]
+    return {
+        "total_cases": x["total"],
+        "cases_80_plus": x["elderly_cases"] or 0,
+        "ratio_80_plus": round((x["elderly_cases"] or 0) / x["total"] * 100, 1),
+        "from_year": x["from_year"],
+        "to_year": x["to_year"],
+    }
+
+
 # ---------------------------------------------------------------- tools
 
 @mcp.tool()
@@ -126,15 +151,24 @@ def get_heat_risk_score(region: str) -> dict:
     v = q("SELECT * FROM vulnerability WHERE region_code=?", (code,))
     acc, v = (acc[0] if acc else {}), (v[0] if v else {})
 
+    prof = illness_profile(code)
+
+    # 결론만이 아니라 계산에 쓴 값을 함께 반환한다 — 담당자가 검증할 수 없는 판단은
+    # 현장에서 쓰이지 않으므로, 근거 문장에 산출 근거를 같이 담는다.
     reasons = []
     if rt_score >= 66:
-        reasons.append(f"체감온도 {feels_like}°C (기온 {temp}°C, 습도 {hum}%), {level} 단계")
+        reasons.append(f"체감온도 {feels_like}°C — {level} 단계 기준 초과 "
+                       f"(실측 기온 {temp}°C, 습도 {hum}%로 계산)")
     if s["elderly_score"] >= 60:
-        reasons.append(f"고령인구 비율 {v.get('elderly_ratio', 0) * 100:.1f}%로 높음")
+        basis = f" ({v['base_year']}년 기준)" if v.get("base_year") else ""
+        reasons.append(f"65세 이상 인구비율 {v.get('elderly_ratio', 0) * 100:.1f}%{basis}")
     if acc.get("is_blind_spot"):
-        reasons.append(f"도보 5분권 무더위쉼터 없음 (최근접 {acc.get('nearest_distance_m', 0):.0f}m)")
-    if s["history_score"] >= 60:
-        reasons.append("과거 온열질환 발생 이력 상위권")
+        reasons.append(f"도보 5분권(400m) 무더위쉼터 없음 — "
+                       f"최근접 {acc.get('nearest_distance_m', 0):.0f}m")
+    if prof and prof["total_cases"] and s["history_score"] >= 60:
+        reasons.append(f"{r['sigungu']} 누적 온열질환 {prof['total_cases']}건 "
+                       f"({prof['from_year']}~{prof['to_year']}, 시군구 단위 집계) 중 "
+                       f"80세 이상 비중 {prof['ratio_80_plus']}%")
 
     return {
         "region_code": code,
@@ -153,6 +187,7 @@ def get_heat_risk_score(region: str) -> dict:
             "elderly": s["elderly_score"],
             "shelter": s["shelter_score"], "history": s["history_score"],
         },
+        "illness_profile": prof,
         "reasons": reasons or ["특이 위험 요소 없음"],
         "evaluated_at": datetime.now().isoformat(timespec="seconds"),
     }

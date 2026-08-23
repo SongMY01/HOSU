@@ -21,6 +21,7 @@ RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
 SCHEMA_PATH = os.path.join(BASE_DIR, "pipeline", "schema.sql")
 
 WALK_5MIN_METERS = 400  # 도보 5분 기준 (국립재난안전연구원 분석 기준 차용)
+SCORING_YEARS = 3       # 위험도 점수에 반영할 온열질환 최근 연도 수 (화면 표기는 전체 누적)
 
 # 정적 위험도 가중치 (합 1.0). 농업인 비율(0.25) 제거 후 나머지에 비례 재배분.
 WEIGHTS = {
@@ -192,46 +193,65 @@ def load_shelters():
     return out
 
 
+def age_group(age_raw):
+    """나이(숫자) -> 10년 단위 연령대. 원본이 각세 나이라 버킷팅이 필요하다."""
+    age = int(age_raw)
+    if age < 10:
+        return "10대 미만"
+    if age >= 80:
+        return "80대 이상"
+    return f"{(age // 10) * 10}대"
+
+
 def load_heat_illness(regions):
     """온열질환 발생 이력. 질병관리청 온열질환 감시데이터(개인 단위 원본,
-    data/raw/heat_illness_gyeongbuk.csv)를 시군구·연도별로 집계한다.
+    data/raw/heat_illness_gyeongbuk.csv)를 시군구 × 연도 × 연령대로 집계한다.
 
     원본이 시군구 단위까지만 주므로(읍면동 필드 없음) 여기서도 시군구 코드로만
     집계하고, 읍면동 스코어는 compute_static_scores에서 소속 시군구 값을 상속한다.
-    최근 3년(원본에 존재하는 연도 중 최신 3개)만 사용한다.
+
+    연도 필터를 여기서 걸지 않고 전 기간을 적재한다 — 위험도 점수는 최근 3년만
+    쓰지만(compute_static_scores), 화면 표기에는 전체 누적과 연령대 구성이 필요하다.
+    한쪽 용도에 맞춰 미리 잘라내면 다른 쪽이 원본을 다시 읽어야 한다.
     """
     rows = read_csv("heat_illness_gyeongbuk.csv")
-    years_present = sorted({r["발생일자"][:4] for r in rows if r["발생일자"]})
-    recent_years = set(years_present[-3:])
-
     code_by_sigungu = {r["sigungu"]: r["region_code"] for r in regions if r["level"] == "sigungu"}
 
     counts = {}
     skipped_no_sigungu = 0
+    skipped_no_age = 0
     unmapped = set()
     for r in rows:
         date = r["발생일자"]
-        if not date or date[:4] not in recent_years:
+        if not date:
             continue
         sgg = r["발생시군구"].strip()
         if not sgg:
             skipped_no_sigungu += 1
             continue
+        if not r["나이"].strip().isdigit():
+            skipped_no_age += 1
+            continue
         code = code_by_sigungu.get(sgg)
         if code is None:
             unmapped.add(sgg)
             continue
-        key = (code, int(date[:4]))
+        key = (code, int(date[:4]), age_group(r["나이"]))
         counts[key] = counts.get(key, 0) + 1
 
     if unmapped:
         print(f"      경고: 시군구명 매핑 실패로 제외됨 - {sorted(unmapped)}")
     if skipped_no_sigungu:
         print(f"      발생시군구 미기재로 제외된 행: {skipped_no_sigungu}건")
+    if skipped_no_age:
+        print(f"      나이 미기재로 제외된 행: {skipped_no_age}건")
 
     return [
-        {"region_code": code, "year": year, "case_count": n, "death_count": 0}
-        for (code, year), n in sorted(counts.items())
+        # 원본에 사망 여부 필드가 없다. 0으로 채우면 "사망 0명"이라는 없는 사실을
+        # 만들어내므로 미확인(NULL)으로 남긴다.
+        {"region_code": code, "year": year, "age_group": ag,
+         "case_count": n, "death_count": None}
+        for (code, year, ag), n in sorted(counts.items())
     ]
 
 
@@ -309,9 +329,14 @@ def compute_static_scores(regions, vuln, access, illness):
     vmap = {v["region_code"]: v for v in vuln}
     amap = {a["region_code"]: a for a in access}
 
-    # 온열질환 이력: 최근 3년 합산
+    # 온열질환 이력: 최근 3년만 합산한다. 전 기간을 쓰면 10년 전 발생이 현재 위험도에
+    # 그대로 반영돼, 최근 몇 해의 경향 변화를 못 따라간다. (화면 표기는 전체 누적을 쓴다)
+    years = {row["year"] for row in illness}
+    recent_years = set(sorted(years)[-SCORING_YEARS:]) if years else set()
     imap = {}
     for row in illness:
+        if row["year"] not in recent_years:
+            continue
         code = row["region_code"]
         imap[code] = imap.get(code, 0) + row["case_count"]
 
@@ -388,7 +413,7 @@ def write_db(regions, vuln, access, illness, scores, coverage, shelters, weather
         ":within_400m_count,:nearest_distance_m,:is_blind_spot,:updated_at)", access)
     conn.executemany(
         "INSERT INTO heat_illness_history VALUES (:region_code,:year,"
-        ":case_count,:death_count)", illness)
+        ":age_group,:case_count,:death_count)", illness)
     conn.executemany(
         "INSERT INTO static_risk_scores VALUES (:region_code,:elderly_score,"
         ":shelter_score,:history_score,:static_total,:computed_at)", scores)

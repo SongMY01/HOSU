@@ -83,6 +83,41 @@ def test_elderly_score_scale_preserved():
     assert over_60, "elderly_score >= 60인 지역이 없음 - '고령인구 비율 높음' 근거가 영영 안 뜬다"
 
 
+def test_scoring_uses_recent_years_only():
+    """위험도 점수는 최근 3년만 반영해야 한다. 전 기간이 섞이면 오래된 발생이
+    현재 위험도를 좌우한다(화면 표기용 전체 누적과 혼동하기 쉬운 지점)."""
+    regions = B.load_regions()
+    illness = B.load_heat_illness(regions)
+    years = sorted({row["year"] for row in illness})
+
+    assert len(years) > B.SCORING_YEARS, "전 기간이 적재되지 않았다면 이 구분 자체가 무의미"
+
+    scores = {s["region_code"]: s for s in B.compute_static_scores(
+        regions, B.load_vulnerability(),
+        B.compute_shelter_access(regions, B.load_shelters()), illness)}
+
+    # 최근 3년 밖 데이터만 있는 지역은 이력 점수가 0이어야 한다.
+    recent = set(years[-B.SCORING_YEARS:])
+    by_code = {}
+    for row in illness:
+        by_code.setdefault(row["region_code"], set()).add(row["year"])
+    old_only = [c for c, ys in by_code.items() if not (ys & recent)]
+    for code in old_only:
+        assert scores[code]["history_score"] == 0, f"{code}: 최근 3년 밖인데 점수가 붙음"
+
+
+def test_illness_age_groups_preserved():
+    """연령대가 집계에서 유실되면 안 된다(80세 이상 비중 근거가 사라진다)."""
+    regions = B.load_regions()
+    illness = B.load_heat_illness(regions)
+    groups = {row["age_group"] for row in illness}
+    assert "80대 이상" in groups, f"연령대 버킷이 유실됨: {sorted(groups)}"
+
+    # PK가 (region_code, year, age_group)이므로 이 조합은 유일해야 한다.
+    keys = [(r["region_code"], r["year"], r["age_group"]) for r in illness]
+    assert len(keys) == len(set(keys)), "중복 키 - INSERT 시 IntegrityError가 난다"
+
+
 def test_older_skew_scores_higher_at_same_elderly_ratio():
     """같은 65+ 비율이라면 85+ 쏠림이 큰 지역의 점수가 더 높아야 한다(설계 의도 자체)."""
     scores, vmap = _all_scores()
@@ -107,3 +142,7 @@ if __name__ == "__main__":
     print("OK: 기준선 스케일 보존 - '고령인구 비율 높음' 근거가 실제로 발동함")
     test_older_skew_scores_higher_at_same_elderly_ratio()
     print("OK: 같은 고령화율이면 초고령 쏠림이 큰 지역이 더 높은 점수")
+    test_scoring_uses_recent_years_only()
+    print(f"OK: 위험도 점수는 최근 {B.SCORING_YEARS}년만 반영 (화면 표기는 전체 누적)")
+    test_illness_age_groups_preserved()
+    print("OK: 온열질환 연령대 보존 + 키 중복 없음")

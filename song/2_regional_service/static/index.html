@@ -140,6 +140,21 @@
             display: flex; align-items: center; gap: 8px;
         }
 
+        /* ================ AI BRIEFING ================ */
+        .brief-card {
+            background: linear-gradient(135deg, rgba(59,130,246,.07), rgba(168,85,247,.05));
+            border: 1px solid rgba(59,130,246,.18);
+            border-radius: var(--radius); padding: 13px 14px;
+            font-size: 12px; line-height: 1.65; color: var(--text-1);
+        }
+        .brief-loading { color: var(--text-3); font-size: 11px; }
+        .brief-src {
+            font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 4px;
+            letter-spacing: .2px; text-transform: none;
+        }
+        .brief-src.ai { background: rgba(59,130,246,.15); color: #60a5fa; }
+        .brief-src.fallback { background: rgba(245,158,11,.13); color: var(--risk-mid); }
+
         /* ================ STAT CARDS ================ */
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .stat-card {
@@ -274,9 +289,12 @@
         /* reasons */
         .reason {
             display: flex; align-items: flex-start; gap: 7px;
-            padding: 7px 9px; background: rgba(239,68,68,.04);
+            padding: 8px 10px; background: rgba(239,68,68,.04);
             border: 1px solid rgba(239,68,68,.08); border-radius: 6px;
-            margin-bottom: 5px; font-size: 11px; color: var(--text-2); line-height: 1.4;
+            margin-bottom: 5px; font-size: 11px; color: var(--text-2); line-height: 1.55;
+        }
+        .reason-src {
+            margin-top: 8px; font-size: 9.5px; color: var(--text-3); line-height: 1.5;
         }
 
         /* ================ LOADING ================ */
@@ -397,6 +415,12 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div>
+                <div class="sec-title">🤖 오늘의 브리핑 <span id="briefSrc" class="brief-src"></span></div>
+                <div class="brief-card" id="briefCard">
+                    <div class="brief-loading">브리핑 생성 중…</div>
+                </div>
+            </div>
+            <div>
                 <div class="sec-title">📊 현황 요약</div>
                 <div class="stats-grid" id="statsGrid"></div>
             </div>
@@ -451,6 +475,24 @@
         initMap();
         await loadData();
         document.getElementById('loading').classList.add('hide');
+        loadBriefing();   // 지도를 막지 않도록 렌더 후 비동기로 채운다
+    }
+
+    async function loadBriefing() {
+        const card = document.getElementById('briefCard');
+        const badge = document.getElementById('briefSrc');
+        try {
+            const d = await (await fetch('/api/briefing')).json();
+            card.textContent = d.text;
+            card.classList.add('fade-in');
+            badge.textContent = d.source === 'ai' ? 'AI 생성' : '규칙 기반';
+            badge.className = 'brief-src ' + d.source;
+            badge.title = d.source === 'ai'
+                ? `${d.model} 생성 · 숫자는 파이프라인 계산값`
+                : (d.error || 'AI 미사용');
+        } catch (e) {
+            card.innerHTML = '<span class="brief-loading">브리핑을 불러오지 못했습니다.</span>';
+        }
     }
 
     function initMap() {
@@ -755,8 +797,12 @@
 
             ${r.reasons&&r.reasons.length?`
             <div class="d-sec">
-                <div class="d-sec-title">⚠️ 판단 근거</div>
-                ${r.reasons.map(t=>'<div class="reason"><span>•</span>'+t+'</div>').join('')}
+                <div class="d-sec-title">⚠️ 위험한 이유</div>
+                ${r.reasons.map(t=>'<div class="reason"><span>•</span><span>'+t+'</span></div>').join('')}
+                <div class="reason-src">
+                    기상청 초단기실황 · 질병관리청 온열질환 감시데이터 ·
+                    행정안전부 무더위쉼터 표준데이터 · 읍면동 연령별 주민등록 인구
+                </div>
             </div>`:''}
         `;
 
