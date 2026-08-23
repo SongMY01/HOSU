@@ -92,15 +92,9 @@ def region_label(r):
 
 
 def illness_profile(region_code):
-    """해당 지역이 속한 시군구의 온열질환 누적 프로파일.
-
-    위험도 점수는 최근 3년만 반영하지만(build.py), 근거로 제시할 때는 전 기간 누적을
-    쓴다 — 표본이 클수록 설명이 단단하다. 원본이 시군구 단위라 읍면동은 부모 값을 본다.
-    실제 집계 연도 범위를 함께 반환해 기간을 정직하게 표기할 수 있게 한다.
-    """
+    """해당 지역이 속한 시군구의 온열질환 누적 프로파일."""
     rows = q("""
         SELECT SUM(case_count) total,
-               SUM(CASE WHEN age_group = '80대 이상' THEN case_count ELSE 0 END) elderly_cases,
                MIN(year) from_year, MAX(year) to_year
         FROM heat_illness_history WHERE region_code = ?
     """, (region_code[:5] + "00000",))
@@ -109,8 +103,6 @@ def illness_profile(region_code):
     x = rows[0]
     return {
         "total_cases": x["total"],
-        "cases_80_plus": x["elderly_cases"] or 0,
-        "ratio_80_plus": round((x["elderly_cases"] or 0) / x["total"] * 100, 1),
         "from_year": x["from_year"],
         "to_year": x["to_year"],
     }

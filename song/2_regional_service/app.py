@@ -25,7 +25,7 @@ from weather import get_feels_like, temp_to_level, LEVEL_SCORE
 sys.path.insert(0, BASE_DIR)
 import briefing
 
-app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"))
+app = Flask(__name__, static_folder=os.path.join(BASE_DIR, "static"), static_url_path="/assets")
 
 DB_PATH = os.path.join(INFRA_DIR, "data", "hosu.db")
 REALTIME_WEIGHT = 0.4
@@ -48,16 +48,10 @@ def region_label(r):
 
 
 def illness_profiles():
-    """시군구별 온열질환 누적 프로파일. {시군구코드: {총건수, 80대이상, 비중, 연도범위}}
-
-    위험도 점수는 최근 3년만 쓰지만(build.py), 화면에는 전체 누적과 연령 구성을 보여준다 —
-    "왜 위험한가"를 설명할 때 표본이 클수록 근거가 단단하기 때문이다.
-    연도 범위를 함께 반환해 실제 집계 기간을 화면에 정직하게 표기한다.
-    """
+    """시군구별 온열질환 누적 프로파일. {시군구코드: {총건수, 연도범위}}"""
     rows = db("""
         SELECT region_code,
                SUM(case_count) AS total,
-               SUM(CASE WHEN age_group = '80대 이상' THEN case_count ELSE 0 END) AS elderly_cases,
                MIN(year) AS from_year, MAX(year) AS to_year
         FROM heat_illness_history GROUP BY region_code
     """)
@@ -66,8 +60,6 @@ def illness_profiles():
         total = r["total"] or 0
         out[r["region_code"]] = {
             "total_cases": total,
-            "cases_80_plus": r["elderly_cases"] or 0,
-            "ratio_80_plus": round((r["elderly_cases"] or 0) / total * 100, 1) if total else 0.0,
             "from_year": r["from_year"],
             "to_year": r["to_year"],
         }
@@ -80,6 +72,18 @@ def illness_profiles():
 @app.route("/")
 def index():
     return send_from_directory(os.path.join(BASE_DIR, "static"), "index.html")
+
+
+@app.route("/<path:path>")
+def catch_all(path):
+    """Serve React SPA: static assets get served from /assets by Flask,
+    but any other path falls back to index.html for client-side routing."""
+    static_dir = os.path.join(BASE_DIR, "static")
+    file_path = os.path.join(static_dir, path)
+    if os.path.isfile(file_path):
+        return send_from_directory(static_dir, path)
+    return send_from_directory(static_dir, "index.html")
+
 
 
 def load_regions(level="all"):
@@ -154,9 +158,8 @@ def load_regions(level="all"):
             )
         if prof and prof["total_cases"] and (r.get("history_score") or 0) >= 60:
             reasons.append(
-                f"{r['sigungu']} 누적 온열질환 {prof['total_cases']}건 "
-                f"({prof['from_year']}~{prof['to_year']}, 시군구 단위 집계) 중 "
-                f"80세 이상 비중 {prof['ratio_80_plus']}%"
+                f"{r['sigungu']} 온열질환 발생 {prof['total_cases']}건 "
+                f"({prof['from_year']}~{prof['to_year']}년, 시군구 집계)"
             )
         r["reasons"] = reasons or ["특이 위험 요소 없음"]
 

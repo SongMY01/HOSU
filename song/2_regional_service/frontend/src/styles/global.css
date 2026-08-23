@@ -1,0 +1,95 @@
+/* ==================== CSS VARIABLES ==================== */
+:root {
+  --bg-primary: #0a0e1a;
+  --bg-secondary: #111827;
+  --bg-card: rgba(17, 24, 39, 0.8);
+  --bg-glass: rgba(255, 255, 255, 0.03);
+  --border: rgba(255, 255, 255, 0.08);
+  --text-1: #f3f4f6;
+  --text-2: #9ca3af;
+  --text-3: #6b7280;
+  --accent: #3b82f6;
+  --accent-glow: rgba(59, 130, 246, 0.3);
+  --risk-low: #10b981;
+  --risk-mid: #f59e0b;
+  --risk-high: #f97316;
+  --risk-crit: #ef4444;
+  --blind: #a855f7;
+  --header-h: 64px;
+  --sidebar-w: 340px;
+  --detail-w: 420px;
+  --radius: 12px;
+  --tr: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==================== RESET ==================== */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-1);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+#root {
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ==================== SCROLLBAR ==================== */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,.12); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.22); }
+
+/* ==================== LEAFLET OVERRIDES ==================== */
+.leaflet-container { background: var(--bg-primary) !important; }
+
+.leaflet-tooltip {
+  background: rgba(17,24,39,.95) !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+  color: var(--text-1) !important;
+  border-radius: 8px !important;
+  padding: 10px 14px !important;
+  font-family: 'Inter', sans-serif !important;
+  font-size: 11px !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4) !important;
+}
+.leaflet-tooltip::before { border-top-color: rgba(17,24,39,.95) !important; }
+
+.leaflet-popup-content-wrapper {
+  background: rgba(17, 24, 39, 0.96) !important;
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(16, 185, 129, 0.3) !important;
+  color: var(--text-1) !important;
+  border-radius: 12px !important;
+  padding: 4px !important;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.6) !important;
+}
+.leaflet-popup-tip { background: rgba(17, 24, 39, 0.96) !important; }
+.leaflet-popup-content { margin: 12px 14px !important; line-height: 1.4 !important; }
+
+/* ==================== ANIMATIONS ==================== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes live {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: .4; transform: scale(.7); }
+}
+@keyframes mPulse {
+  0%,100% { stroke-opacity: .55; }
+  50%      { stroke-opacity: .12; stroke-width: 6; }
+}
+
+.fade-in { animation: fadeUp .4s ease-out forwards; }
+.pulse-marker { animation: mPulse 2s ease-in-out infinite; }

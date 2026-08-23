@@ -1,0 +1,64 @@
+.header {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--header-h);
+  background: linear-gradient(135deg, rgba(17,24,39,.96), rgba(30,41,59,.96));
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; z-index: 1000;
+}
+
+.left { display: flex; align-items: center; gap: 14px; }
+.fire { font-size: 24px; }
+
+.logo {
+  font-size: 22px; font-weight: 800;
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  letter-spacing: -.5px;
+}
+.sub { font-size: 13px; color: var(--text-2); }
+
+.right { display: flex; align-items: center; gap: 12px; }
+
+.shelterBtn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px; font-size: 12px; font-weight: 600;
+  color: var(--text-2); background: rgba(255,255,255,.05);
+  border: 1px solid var(--border); border-radius: 8px;
+  cursor: pointer; transition: var(--tr); font-family: inherit;
+}
+.shelterBtn:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.18); color: var(--text-1); }
+.shelterBtnActive {
+  background: rgba(16,185,129,.15); border-color: rgba(16,185,129,.4);
+  color: #34d399; box-shadow: 0 0 12px rgba(16,185,129,.2);
+}
+
+.levelToggle {
+  display: flex; background: rgba(255,255,255,.05);
+  border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
+}
+.levelBtn {
+  padding: 7px 14px; font-size: 12px; font-weight: 600;
+  color: var(--text-2); background: transparent;
+  border: none; cursor: pointer; transition: var(--tr); font-family: inherit;
+}
+.levelBtnActive { background: var(--accent); color: #fff; }
+.levelBtn:hover:not(.levelBtnActive) { background: rgba(255,255,255,.07); }
+
+.searchBox { position: relative; }
+.searchInput {
+  padding: 7px 14px 7px 34px;
+  background: rgba(255,255,255,.05); border: 1px solid var(--border);
+  border-radius: 8px; color: var(--text-1); font-size: 12px; width: 180px;
+  outline: none; transition: var(--tr); font-family: inherit;
+}
+.searchInput::placeholder { color: var(--text-3); }
+.searchInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); width: 240px; }
+.searchIcon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--text-3); }
+
+.ts { font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+.liveDot {
+  width: 7px; height: 7px; background: var(--risk-low);
+  border-radius: 50%; animation: live 2s infinite;
+}

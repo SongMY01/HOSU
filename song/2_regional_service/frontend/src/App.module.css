@@ -1,0 +1,19 @@
+.app {
+  height: 100vh; width: 100vw; display: flex; flex-direction: column;
+}
+.main {
+  display: flex;
+  height: calc(100vh - var(--header-h));
+  margin-top: var(--header-h);
+}
+.loading {
+  position: fixed; inset: 0; background: var(--bg-primary);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  z-index: 9999;
+}
+.spinner {
+  width: 44px; height: 44px;
+  border: 3px solid rgba(255,255,255,.08); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 14px;
+}
+.loadingText { font-size: 13px; color: var(--text-3); }
