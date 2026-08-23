@@ -768,7 +768,7 @@
                 <div class="d-row"><span class="d-row-l">관내 쉼터</span><span class="d-row-v">${r.shelter_count??'-'}개</span></div>
                 <div class="d-row"><span class="d-row-l" title="주민 집이 아닌 마을 중심점 기준입니다">마을 중심 400m 내</span><span class="d-row-v">${r.within_400m_count??'-'}개</span></div>
                 <div class="d-row"><span class="d-row-l">최근접 거리</span><span class="d-row-v">${r.nearest_distance_m?r.nearest_distance_m.toFixed(0)+'m':'-'}</span></div>
-                <div class="d-row"><span class="d-row-l">쉼터 배치</span><span class="d-row-v ${r.is_blind_spot==null?'':(r.is_blind_spot?'no':'yes')}">${r.is_blind_spot==null?'— 미조사':(r.is_blind_spot?'⚠ 관내 쉼터 없음':'✅ 배치됨')}</span></div>
+                <div class="d-row"><span class="d-row-l">쉼터 접근성</span><span class="d-row-v ${r.is_blind_spot==null?'':(r.is_blind_spot?'no':'yes')}" title="${r.is_blind_spot==null?'시군구는 수십 km에 걸쳐 있어 중심점 하나로 접근성을 판정할 수 없습니다':'마을 중심에서 최근접 쉼터까지 도보 15분 초과 시 사각지대'}">${r.is_blind_spot==null?'읍면동 단위로 판정':(r.is_blind_spot?'⚠ 도보권 밖 (사각지대)':'✅ 도보권 내')}</span></div>
                 
                 <div style="margin-top:10px">
                     <button class="sp-btn" style="background:rgba(16,185,129,.2);border:1px solid rgba(16,185,129,.4);color:#34d399" onclick="loadAreaShelters('${r.sigungu}', '${r.eupmyeondong || ''}')">

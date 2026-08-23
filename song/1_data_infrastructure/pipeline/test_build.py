@@ -165,7 +165,7 @@ def test_blind_spot_matches_distance_rule():
 
     wrong = []
     for code, a in access.items():
-        if a["is_blind_spot"] is None:  # 쉼터 미조사 시군구는 판정 대상이 아니다
+        if a["is_blind_spot"] is None:  # 시군구는 판정 단위가 아니다(읍면동 집계값)
             continue
         d = a["nearest_distance_m"]
         expected = int(d is not None and d > B.BLIND_SPOT_METERS)
