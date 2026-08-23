@@ -22,6 +22,8 @@ SCHEMA_PATH = os.path.join(BASE_DIR, "pipeline", "schema.sql")
 
 WALK_5MIN_METERS = 400  # 도보 5분 기준 (국립재난안전연구원 분석 기준 차용)
 SCORING_YEARS = 3       # 위험도 점수에 반영할 온열질환 최근 연도 수 (화면 표기는 전체 누적)
+MAX_EMD_DISTANCE_KM = 60  # 읍면동 중심점이 소속 시군구에서 이보다 멀면 좌표 오류로 본다
+                          # (경북 실측 정상 최대 29.5km, 발견된 오류는 147km)
 
 # 정적 위험도 가중치 (합 1.0). 농업인 비율(0.25) 제거 후 나머지에 비례 재배분.
 WEIGHTS = {
@@ -111,6 +113,34 @@ def read_csv(name):
 # ---------------------------------------------------------------- loaders
 # 각 함수는 실제 공공데이터 API 호출로 교체 가능한 지점
 
+def check_region_coords(regions):
+    """읍면동 중심점이 소속 시군구에서 비상식적으로 멀면 경고한다.
+
+    중심점이 틀리면 기상 격자·쉼터 거리·위험도가 전부 조용히 오염된다. 예외도 안 나고
+    지도에서 엉뚱한 곳에 점 하나가 찍힐 뿐이라 제일 발견하기 어려운 종류의 오류다.
+    (실제로 원본 중심점 데이터에서 포항시 상대1·2동이 147km 떨어진 좌표를 갖고 있었다.)
+
+    시도별 경계를 하드코딩하지 않고 '부모 시군구로부터의 거리'로 판정하므로,
+    다른 시도 데이터로 교체해도 그대로 동작한다. 경북 실측 정상 최대값은 29.5km다.
+    """
+    parents = {r["sigungu"]: r for r in regions if r["level"] == "sigungu"}
+    suspects = []
+    for r in regions:
+        if r["level"] != "eupmyeondong":
+            continue
+        p = parents.get(r["sigungu"])
+        if not p:
+            continue
+        d = haversine_m(p["lat"], p["lon"], r["lat"], r["lon"]) / 1000.0
+        if d > MAX_EMD_DISTANCE_KM:
+            suspects.append((d, r))
+
+    for d, r in sorted(suspects, reverse=True):
+        print(f"      경고: {r['sigungu']} {r['eupmyeondong']} 중심점이 시군구에서 "
+              f"{d:.0f}km 떨어져 있음 ({r['lat']}, {r['lon']}) — 원본 좌표 확인 필요")
+    return suspects
+
+
 def load_regions():
     """행정구역 마스터. 실제로는 행정표준코드 + SGIS 경계 중심점."""
     rows = read_csv("regions.csv")
@@ -129,6 +159,7 @@ def load_regions():
             "lat": lat, "lon": lon,
             "kma_nx": nx, "kma_ny": ny,
         })
+    check_region_coords(out)
     return out
 
 

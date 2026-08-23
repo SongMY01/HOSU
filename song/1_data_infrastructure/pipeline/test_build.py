@@ -106,6 +106,19 @@ def test_scoring_uses_recent_years_only():
         assert scores[code]["history_score"] == 0, f"{code}: 최근 3년 밖인데 점수가 붙음"
 
 
+def test_region_coords_within_parent_sigungu():
+    """모든 읍면동 중심점이 소속 시군구 근처에 있어야 한다.
+
+    중심점이 틀리면 기상 격자·쉼터 거리·위험도가 전부 조용히 오염된다 —
+    예외도 안 나고 지도에 점 하나가 엉뚱한 데 찍힐 뿐이라 눈으로만 발견된다.
+    실제로 원본 데이터의 포항시 상대1·2동이 147km 떨어져 있었다."""
+    suspects = B.check_region_coords(B.load_regions())
+    assert not suspects, (
+        "시군구에서 멀리 떨어진 읍면동: "
+        + ", ".join(f"{r['sigungu']} {r['eupmyeondong']} ({d:.0f}km)" for d, r in suspects)
+    )
+
+
 def test_illness_age_groups_preserved():
     """연령대가 집계에서 유실되면 안 된다(80세 이상 비중 근거가 사라진다)."""
     regions = B.load_regions()
@@ -146,3 +159,5 @@ if __name__ == "__main__":
     print(f"OK: 위험도 점수는 최근 {B.SCORING_YEARS}년만 반영 (화면 표기는 전체 누적)")
     test_illness_age_groups_preserved()
     print("OK: 온열질환 연령대 보존 + 키 중복 없음")
+    test_region_coords_within_parent_sigungu()
+    print(f"OK: 모든 읍면동 중심점이 소속 시군구 {B.MAX_EMD_DISTANCE_KM}km 이내")
