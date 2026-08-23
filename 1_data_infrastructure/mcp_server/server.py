@@ -161,11 +161,11 @@ def get_heat_risk_score(region: str) -> dict:
         reasons.append(f"65세 이상 인구비율 {v.get('elderly_ratio', 0) * 100:.1f}%{basis}")
     if acc.get("is_blind_spot"):
         _d = acc.get("nearest_distance_m") or 0
-        reasons.append(f"가장 가까운 무더위쉼터가 {_d:.0f}m (도보 {_d / 80:.0f}분) — 도보권 밖")
+        reasons.append(f"가장 가까운 무더위쉼터가 {_d:.0f}m "
+                       f"(도보 {_d / WALK_SPEED_M_PER_MIN:.0f}분) — 도보권 밖")
     if prof and prof["total_cases"] and s["history_score"] >= 60:
         reasons.append(f"{r['sigungu']} 누적 온열질환 {prof['total_cases']}건 "
-                       f"({prof['from_year']}~{prof['to_year']}, 시군구 단위 집계) 중 "
-                       f"80세 이상 비중 {prof['ratio_80_plus']}%")
+                       f"({prof['from_year']}~{prof['to_year']}, 시군구 단위 집계)")
 
     return {
         "region_code": code,
@@ -259,7 +259,13 @@ def list_high_priority_regions(top_n: int = 10, level: str = "sigungu") -> dict:
 
 @mcp.tool()
 def get_shelter_coverage(region: str) -> dict:
-    """지역의 무더위쉼터 접근성을 반환한다. 도보 5분(400m) 기준 사각지대 여부 포함.
+    """지역의 무더위쉼터 접근성을 반환한다.
+
+    사각지대는 마을 중심에서 최근접 쉼터까지의 도보 시간으로 판정한다(읍면동 단위).
+    적용된 기준값은 반환값의 note에 그대로 담기므로 답변 근거로는 그쪽을 쓴다 —
+    여기 숫자를 적으면 기준이 바뀔 때 한쪽만 고쳐진다.
+    시군구는 판정 단위가 아니다: is_blind_spot이 null이고, 쉼터 지표는
+    관할 읍면동 집계값이다(nearest_distance_m은 관할 읍면동 평균 거리).
 
     Args:
         region: 행정표준코드 또는 지역명
@@ -361,7 +367,7 @@ def get_nearby_shelters(region: str, radius_m: int = 1500, limit: int = 10) -> d
                 "sigungu": s["sigungu"],
                 "road_address": s["road_address"] or s["lot_address"],
                 "distance_m": round(d, 1),
-                "walking_minutes": round(d / 80.0, 1),  # 보행속도 분속 80m 기준
+                "walking_minutes": round(d / WALK_SPEED_M_PER_MIN, 1),
                 "capacity": s["capacity"],
                 "aircons": s["aircons"],
                 "fans": s["fans"],
