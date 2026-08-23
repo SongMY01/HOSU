@@ -29,14 +29,22 @@ CREATE TABLE IF NOT EXISTS vulnerability (
 -- 쉼터 배치·접근성. 세 지표가 서로 다른 질문에 답하므로 함께 봐야 한다.
 CREATE TABLE IF NOT EXISTS shelter_access (
     region_code        TEXT PRIMARY KEY REFERENCES regions(region_code),
-    shelter_count      INTEGER,           -- 관내 쉼터 수(근사). 주소의 읍면동명 우선,
-                                          -- 없으면 최근접 중심점 폴백 — 참고 지표용이며
-                                          -- 사각지대 판정에는 쓰지 않는다
+    -- 아래 세 지표는 level에 따라 의미가 다르다. 읍면동은 자기 중심점 기준 실측이고,
+    -- 시군구는 중심점 하나로 수십 km를 대표할 수 없어 관할 읍면동 집계값이다.
+    shelter_count      INTEGER,           -- 관내 쉼터 수. 읍면동은 근사(주소의 읍면동명
+                                          -- 우선, 없으면 최근접 중심점 폴백)라 참고 지표이며
+                                          -- 사각지대 판정에는 쓰지 않는다.
+                                          -- 시군구는 쉼터 1건을 1회만 세므로 정확하다
     within_400m_count  INTEGER,           -- 마을 중심점에서 도보 5분(400m) 내 쉼터 수
-                                          -- 주민 집 기준이 아니라 중심점 기준임에 유의
-    nearest_distance_m REAL,              -- 최근접 쉼터까지 거리(m), 행정구역 무관
-    is_blind_spot      INTEGER,           -- 1이면 최근접 쉼터가 도보 15분(1.2km) 밖.
-                                          -- NULL이면 해당 시군구가 쉼터 조사 대상이 아님
+                                          -- 주민 집 기준이 아니라 중심점 기준임에 유의.
+                                          -- 시군구는 관할 읍면동의 합
+    nearest_distance_m REAL,              -- 읍면동: 최근접 쉼터까지 거리(m), 행정구역 무관
+                                          -- 시군구: 관할 읍면동 최근접 거리의 평균
+                                          --         ('가장 가까운 쉼터'가 아니다)
+    is_blind_spot      INTEGER,           -- 1이면 최근접 쉼터가 도보권 밖.
+                                          -- 기준값은 build.BLIND_SPOT_METERS (여기 적으면
+                                          -- 한쪽만 바뀐다). NULL은 '미조사'가 아니라
+                                          -- '판정 단위가 아님' — 시군구 행이 그렇다
     updated_at         TEXT
 );
 

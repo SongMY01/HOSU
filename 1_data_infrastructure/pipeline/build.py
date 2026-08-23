@@ -183,11 +183,22 @@ def load_regions():
     return out
 
 
-def load_vulnerability():
-    """취약인구 지표. 실제로는 통계청 KOSIS / 주민등록 인구통계."""
+def load_vulnerability(regions):
+    """취약인구 지표. 실제로는 통계청 KOSIS / 주민등록 인구통계.
+
+    regions에 없는 행은 버린다. 제외 조건(EXCLUDED_SIGUNGU 등)을 로더마다 따로
+    적으면 한 곳을 빠뜨리게 되고, 실제로 그렇게 군위군 10개 행이 vulnerability에만
+    남아 schema.sql의 FK 계약(REFERENCES regions)을 깨고 있었다. 대상 판정은
+    load_regions 한 곳에서만 하고 나머지는 그 결과를 따른다.
+    """
+    codes = {r["region_code"] for r in regions}
     rows = read_csv("population.csv")
     out = []
+    dropped = 0
     for r in rows:
+        if r["region_code"] not in codes:
+            dropped += 1
+            continue
         total = int(r["total_population"])
         elderly = int(r["elderly_65_plus"])
         out.append({
@@ -199,6 +210,8 @@ def load_vulnerability():
             "elderly_85_ratio": round(float(r["elderly_85_ratio"]) / 100.0, 4),
             "base_year": int(r["base_year"]),
         })
+    if dropped:
+        print(f"      대상 지역이 아니어서 제외: {dropped}개 행")
     return out
 
 
@@ -378,11 +391,9 @@ def assign_shelters_to_regions(regions, shelters):
     이 값은 사각지대 판정에 쓰지 않는다(배정이 근사라 불안정). 판정은 최근접 거리로 한다.
     """
     emd = [r for r in regions if r["level"] == "eupmyeondong"]
-    by_name = {}
-    for r in emd:
-        by_name.setdefault(r["eupmyeondong"], []).append(r)
 
     counts = {r["region_code"]: 0 for r in regions}
+    by_sigungu = {}   # 시군구 집계용. 읍면동 카운트를 합치면 동점 배정분이 중복된다.
     by_address = 0
 
     for s in shelters:
@@ -405,17 +416,21 @@ def assign_shelters_to_regions(regions, shelters):
 
         for r in matched:
             counts[r["region_code"]] += 1
+        # 시군구 단위로는 한 쉼터를 한 번만 센다.
+        for sgg in {r["sigungu"] for r in matched}:
+            by_sigungu[sgg] = by_sigungu.get(sgg, 0) + 1
 
     if shelters:
         print(f"      관내 쉼터 배정: 주소 기준 {by_address}건, "
               f"좌표 폴백 {len(shelters) - by_address}건")
 
-    # 시군구 행은 관할 읍면동의 합으로 집계한다(자기 중심점 기준이 아니라).
+    # 시군구 행은 관할 읍면동의 배정 결과로 집계하되, 읍면동 카운트를 더하지는 않는다.
+    # 중심점이 같은 행정동에는 동점 배정을 하므로 합산하면 같은 쉼터가 여러 번 계수된다
+    # (합계 5,808 vs 실제 5,605, 청도군 387 vs 318). 시군구 단위 '관내 쉼터 수'는
+    # 근사가 필요 없는 값이라 근사값을 합쳐 정확도를 잃을 이유가 없다.
     for r in regions:
         if r["level"] == "sigungu":
-            counts[r["region_code"]] = sum(
-                counts[e["region_code"]] for e in emd if e["sigungu"] == r["sigungu"]
-            )
+            counts[r["region_code"]] = by_sigungu.get(r["sigungu"], 0)
     return counts
 
 
@@ -632,7 +647,7 @@ def main():
     print(f"      {len(regions)}개 지역")
 
     print("[2/6] 취약인구 지표 로드")
-    vuln = load_vulnerability()
+    vuln = load_vulnerability(regions)
 
     print("[3/6] 쉼터 도보권 접근성 계산")
     shelters = load_shelters()
