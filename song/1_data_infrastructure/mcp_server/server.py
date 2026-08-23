@@ -31,6 +31,11 @@ DB_PATH = os.path.join(BASE_DIR, "data", "hosu.db")
 # 최종 위험도 = 정적 기저 위험도 * (1 - a) + 실시간 기온 위험도 * a
 REALTIME_WEIGHT = 0.4
 
+# 판정 기준은 파이프라인에서 가져온다. 값을 여기 다시 적으면 한쪽만 바뀌었을 때
+# 서버가 실제 판정과 다른 설명을 내놓게 된다.
+sys.path.insert(0, os.path.join(BASE_DIR, "pipeline"))
+from build import BLIND_SPOT_METERS, WALK_SPEED_M_PER_MIN
+
 mcp = _Server(
     "hosu-heat-risk",
     instructions="경상북도 폭염 위험도와 대응 채널 커버리지를 조회하는 도구 모음. "
@@ -274,15 +279,24 @@ def get_shelter_coverage(region: str) -> dict:
     if not rows:
         return {"error": "쉼터 데이터 없음"}
     a = rows[0]
+    d = a["nearest_distance_m"]
+    is_emd = bool(r["eupmyeondong"])
     return {
         "region_name": region_label(r),
+        "level": "eupmyeondong" if is_emd else "sigungu",
         "shelter_count": a["shelter_count"],
+        "nearest_distance_m": d,
+        "nearest_walk_minutes": round(d / WALK_SPEED_M_PER_MIN, 1) if d is not None else None,
         "within_400m_count": a["within_400m_count"],
-        "nearest_distance_m": a["nearest_distance_m"],
-        # NULL은 '쉼터가 있다'가 아니라 '해당 시군구가 쉼터 조사에 포함되지 않았다'는 뜻이라
-        # False로 뭉개지 않고 그대로 넘긴다.
+        # 시군구는 수십 km에 걸쳐 있어 중심점 한 점으로 접근성을 말할 수 없다.
+        # 사각지대는 읍면동 단위 판정이므로 시군구는 null로 둔다(false가 아니다).
         "is_blind_spot": None if a["is_blind_spot"] is None else bool(a["is_blind_spot"]),
-        "note": "도보 5분(400m) 내 쉼터가 없으면 사각지대로 판정",
+        "note": (
+            f"사각지대 = 마을 중심에서 최근접 쉼터까지 도보 "
+            f"{BLIND_SPOT_METERS // WALK_SPEED_M_PER_MIN}분({BLIND_SPOT_METERS}m) 초과"
+            if is_emd else
+            "시군구는 사각지대 판정 단위가 아님 — 쉼터 지표는 관할 읍면동 집계값"
+        ),
     }
 
 

@@ -60,7 +60,7 @@ python 1_data_infrastructure/mcp_server/server.py
 | `get_heat_risk_score(region)` | 특정 지역의 오늘자 폭염 위험도 점수 산출 | 정적 위험도(고령인구/쉼터접근성/발생이력) + 실시간 체감온도 결합 및 산출 근거 |
 | `list_high_priority_regions(top_n, level)` | 우선 대응이 필요한 상위 위험 지역 순위 | 시군구/읍면동 단위 상위 N개 지역 목록 및 위험도 |
 | `get_current_weather(region)` | 해당 지역의 실시간 기상 실측 | 기온, 습도, 체감온도, 폭염 위험단계, 발표시각, 기상청 격자좌표 |
-| `get_shelter_coverage(region)` | 해당 지역의 무더위쉼터 도보권(400m) 접근성 및 사각지대 판정 | 도보 5분 내 쉼터 유무, 최근접 거리(m) |
+| `get_shelter_coverage(region)` | 해당 지역의 무더위쉼터 접근성 및 사각지대 판정 | 최근접 거리(m), 관내 쉼터 수, 마을 중심 400m 내 쉼터 수, 사각지대 여부(도보 15분 초과) |
 | `get_nearby_shelters(region, radius_m, limit)` | 반경 내 실제 쉼터를 거리순 조회 | 쉼터명·주소·도보 소요시간·수용인원·냉방기기 대수·야간/휴일 운영·카카오맵 링크 |
 | `search_shelters(keyword, sigungu, limit)` | 쉼터명 또는 주소 키워드 검색 | 위와 동일한 쉼터 상세 정보 |
 | `get_vulnerable_population(region)` | 고령인구 연령대별 집계 지표 | 총인구, 65세+/75세+/85세+ 인구 및 비율 |
