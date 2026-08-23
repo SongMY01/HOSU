@@ -1,17 +1,19 @@
 .title {
-  font-size: 10px; font-weight: 700; color: var(--text-3);
-  text-transform: uppercase; letter-spacing: 1.5px;
+  font-size: 11px; font-weight: 700; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 1.2px;
   display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
 }
 .card {
-  background: linear-gradient(135deg, rgba(59,130,246,.07), rgba(168,85,247,.05));
-  border: 1px solid rgba(59,130,246,.18); border-radius: var(--radius);
-  padding: 13px 14px; font-size: 12px; line-height: 1.65; color: var(--text-1);
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: var(--radius);
+  padding: 14px 16px; font-size: 12.5px; line-height: 1.65; color: #0369a1;
+  box-shadow: var(--shadow-sm);
 }
-.loading { color: var(--text-3); font-size: 11px; }
+.loading { color: var(--text-3); font-size: 12px; }
 .badge {
-  font-size: 9px; font-weight: 600; padding: 1px 6px; border-radius: 4px;
+  font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
   letter-spacing: .2px;
 }
-.ai { background: rgba(59,130,246,.15); color: #60a5fa; }
-.fallback { background: rgba(245,158,11,.13); color: var(--risk-mid); }
+.ai { background: #dbeafe; color: #1d4ed8; }
+.fallback { background: #fef3c7; color: #b45309; }

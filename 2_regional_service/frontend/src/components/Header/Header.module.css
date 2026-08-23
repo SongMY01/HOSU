@@ -1,9 +1,10 @@
 .header {
   position: fixed; top: 0; left: 0; right: 0;
   height: var(--header-h);
-  background: linear-gradient(135deg, rgba(17,24,39,.96), rgba(30,41,59,.96));
-  backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px; z-index: 1000;
 }
@@ -13,29 +14,29 @@
 
 .logo {
   font-size: 22px; font-weight: 800;
-  background: linear-gradient(135deg, #f97316, #ef4444);
+  background: linear-gradient(135deg, #ea580c, #dc2626);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   letter-spacing: -.5px;
 }
-.sub { font-size: 13px; color: var(--text-2); }
+.sub { font-size: 13px; color: var(--text-2); font-weight: 500; }
 
 .right { display: flex; align-items: center; gap: 12px; }
 
 .shelterBtn {
   display: flex; align-items: center; gap: 6px;
   padding: 7px 14px; font-size: 12px; font-weight: 600;
-  color: var(--text-2); background: rgba(255,255,255,.05);
+  color: var(--text-2); background: #f8fafc;
   border: 1px solid var(--border); border-radius: 8px;
   cursor: pointer; transition: var(--tr); font-family: inherit;
 }
-.shelterBtn:hover { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.18); color: var(--text-1); }
+.shelterBtn:hover { background: #f1f5f9; border-color: #cbd5e1; color: var(--text-1); }
 .shelterBtnActive {
-  background: rgba(16,185,129,.15); border-color: rgba(16,185,129,.4);
-  color: #34d399; box-shadow: 0 0 12px rgba(16,185,129,.2);
+  background: rgba(5, 150, 105, 0.1); border-color: rgba(5, 150, 105, 0.4);
+  color: #059669; box-shadow: 0 0 12px rgba(5, 150, 105, 0.15);
 }
 
 .levelToggle {
-  display: flex; background: rgba(255,255,255,.05);
+  display: flex; background: #f1f5f9;
   border-radius: 8px; overflow: hidden; border: 1px solid var(--border);
 }
 .levelBtn {
@@ -43,22 +44,25 @@
   color: var(--text-2); background: transparent;
   border: none; cursor: pointer; transition: var(--tr); font-family: inherit;
 }
-.levelBtnActive { background: var(--accent); color: #fff; }
-.levelBtn:hover:not(.levelBtnActive) { background: rgba(255,255,255,.07); }
+.levelBtnActive { background: var(--accent); color: #fff; box-shadow: 0 1px 3px rgba(37,99,235,0.3); }
+.levelBtn:hover:not(.levelBtnActive) { background: #e2e8f0; color: var(--text-1); }
 
 .searchBox { position: relative; }
 .searchInput {
   padding: 7px 14px 7px 34px;
-  background: rgba(255,255,255,.05); border: 1px solid var(--border);
+  background: #f1f5f9; border: 1px solid var(--border);
   border-radius: 8px; color: var(--text-1); font-size: 12px; width: 180px;
   outline: none; transition: var(--tr); font-family: inherit;
 }
 .searchInput::placeholder { color: var(--text-3); }
-.searchInput:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); width: 240px; }
+.searchInput:focus {
+  background: #ffffff; border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow); width: 240px;
+}
 .searchIcon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 13px; color: var(--text-3); }
 
-.ts { font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 6px; }
+.ts { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 6px; font-weight: 500; }
 .liveDot {
-  width: 7px; height: 7px; background: var(--risk-low);
+  width: 8px; height: 8px; background: var(--risk-low);
   border-radius: 50%; animation: live 2s infinite;
 }

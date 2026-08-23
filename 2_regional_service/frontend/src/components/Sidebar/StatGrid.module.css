@@ -1,10 +1,10 @@
 .sectionTitle {
-  font-size: 10px; font-weight: 700; color: var(--text-3);
-  text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 10px;
+  font-size: 11px; font-weight: 700; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 10px;
 }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .card {
-  background: var(--bg-glass); border: 1px solid var(--border);
+  background: #f8fafc; border: 1px solid var(--border);
   border-radius: var(--radius); padding: 14px;
   transition: var(--tr); position: relative; overflow: hidden;
 }
@@ -13,16 +13,19 @@
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
   opacity: 0; transition: var(--tr);
 }
-.card:hover { border-color: rgba(255,255,255,.14); transform: translateY(-2px); }
+.card:hover {
+  background: #ffffff; border-color: #cbd5e1;
+  box-shadow: var(--shadow-sm); transform: translateY(-2px);
+}
 .card:hover::before { opacity: 1; }
-.alert { border-color: rgba(239,68,68,.25); }
+.alert { border-color: #fecaca; background: #fff5f5; }
 .alert::before { background: linear-gradient(90deg, transparent, var(--risk-crit), transparent); opacity: 1; }
 .wide { grid-column: span 2; }
-.val { font-size: 26px; font-weight: 800; line-height: 1; margin-bottom: 3px; }
-.lbl { font-size: 10px; color: var(--text-3); font-weight: 500; }
+.val { font-size: 26px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+.lbl { font-size: 11px; color: var(--text-2); font-weight: 600; }
 .skeleton {
-  background: var(--bg-glass); border: 1px solid var(--border);
+  background: #f1f5f9; border: 1px solid var(--border);
   border-radius: var(--radius); height: 64px;
   animation: skeletonPulse 1.5s ease-in-out infinite;
 }
-@keyframes skeletonPulse { 0%,100%{opacity:.4} 50%{opacity:.7} }
+@keyframes skeletonPulse { 0%,100%{opacity:.5} 50%{opacity:.8} }
