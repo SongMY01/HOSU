@@ -8,10 +8,8 @@ export default function BriefingCard() {
     <div>
       <div className={styles.title}>
         🤖 오늘의 브리핑
-        {briefing && (
-          <span className={`${styles.badge} ${briefing.source === 'ai' ? styles.ai : styles.fallback}`}>
-            {briefing.source === 'ai' ? 'AI 생성' : '규칙 기반'}
-          </span>
+        {briefing && briefing.source === 'ai' && (
+          <span className={`${styles.badge} ${styles.ai}`}>AI 생성</span>
         )}
       </div>
       <div className={styles.card}>
