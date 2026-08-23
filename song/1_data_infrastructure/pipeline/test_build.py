@@ -106,6 +106,87 @@ def test_scoring_uses_recent_years_only():
         assert scores[code]["history_score"] == 0, f"{code}: 최근 3년 밖인데 점수가 붙음"
 
 
+def test_excluded_sigungu_absent_and_all_surveyed():
+    """대상 지역이 최신 행정구역과 맞아야 한다.
+
+    군위군은 2023년 7월 대구광역시로 편입돼 경북 쉼터 목록에도, 최근 온열질환
+    집계에도 없다. 정적 출처인 행정구역·인구 파일에만 남아 있어 그대로 두면
+    쉼터·이력이 통째로 빈 10개 지역이 데이터 공백 탓에 위험도 상위권에 오른다."""
+    regions = B.load_regions()
+    leaked = {r["sigungu"] for r in regions} & B.EXCLUDED_SIGUNGU
+    assert not leaked, f"제외 대상이 적재됨: {leaked}"
+
+    # 남은 시군구는 전부 쉼터 데이터가 있어야 '쉼터 없음'과 '미조사'가 구분된다.
+    shelters = B.load_shelters()
+    unsurveyed = {
+        r["sigungu"] for r in regions
+        if not any(B._same_sigungu(r["sigungu"], s["sigungu"]) for s in shelters)
+    }
+    assert not unsurveyed, f"쉼터 데이터가 없는 시군구: {unsurveyed}"
+
+
+def test_shelter_counts_are_per_region():
+    """관내 쉼터 수가 지역별로 달라야 한다.
+
+    이전에는 전 지역이 전국 총계(5,605)로 채워져 있었다 — 화면에 '관내 쉼터 5605개'가
+    떠도 예외가 안 나서 눈으로만 발견되는 오류였다."""
+    regions = B.load_regions()
+    access = B.compute_shelter_access(regions, B.load_shelters())
+    counts = {a["shelter_count"] for a in access}
+    assert len(counts) > 1, f"관내 쉼터 수가 전 지역 동일: {counts}"
+
+    total = len(B.load_shelters())
+    assert max(counts) < total, f"한 지역이 전체 쉼터({total})를 다 가짐 - 배정이 안 됨"
+
+
+def test_blind_spot_is_not_almost_everything():
+    """사각지대가 대다수면 우선순위를 가릴 수 없다.
+
+    중심점 400m 기준일 때 69%가 사각지대로 나와 지표가 무의미했다. 정의를
+    '관내 쉼터 0개'로 바꾼 뒤의 회귀 방지."""
+    regions = B.load_regions()
+    access = B.compute_shelter_access(regions, B.load_shelters())
+    emd = {r["region_code"] for r in regions if r["level"] == "eupmyeondong"}
+    rows = [a for a in access if a["region_code"] in emd]
+    blind = sum(1 for a in rows if a["is_blind_spot"])
+    ratio = blind / len(rows)
+    assert ratio < 0.25, f"읍면동의 {ratio:.0%}가 사각지대 - 판정 기준을 다시 볼 것"
+
+
+def test_blind_spot_matches_distance_rule():
+    """사각지대는 최근접 거리 하나로만 결정돼야 한다.
+
+    관내 소속 판정(배정 근사)이 판정에 섞이면, 쉼터가 코앞에 있는데 사각지대로 찍히는
+    오류가 계속 새어나온다 — 실제로 경주시 황오동(288m), 상주시 사벌국면(724m)이
+    그렇게 잘못 표시됐었다."""
+    regions = B.load_regions()
+    access = {a["region_code"]: a for a in B.compute_shelter_access(regions, B.load_shelters())}
+    rmap = {r["region_code"]: r for r in regions}
+
+    wrong = []
+    for code, a in access.items():
+        if a["is_blind_spot"] is None:  # 시군구는 판정 단위가 아니다(읍면동 집계값)
+            continue
+        d = a["nearest_distance_m"]
+        expected = int(d is not None and d > B.BLIND_SPOT_METERS)
+        if a["is_blind_spot"] != expected:
+            wrong.append((rmap[code]["sigungu"], rmap[code]["eupmyeondong"], d))
+    assert not wrong, f"거리 기준과 판정이 어긋남: {wrong[:5]}"
+
+
+def test_region_coords_within_parent_sigungu():
+    """모든 읍면동 중심점이 소속 시군구 근처에 있어야 한다.
+
+    중심점이 틀리면 기상 격자·쉼터 거리·위험도가 전부 조용히 오염된다 —
+    예외도 안 나고 지도에 점 하나가 엉뚱한 데 찍힐 뿐이라 눈으로만 발견된다.
+    실제로 원본 데이터의 포항시 상대1·2동이 147km 떨어져 있었다."""
+    suspects = B.check_region_coords(B.load_regions())
+    assert not suspects, (
+        "시군구에서 멀리 떨어진 읍면동: "
+        + ", ".join(f"{r['sigungu']} {r['eupmyeondong']} ({d:.0f}km)" for d, r in suspects)
+    )
+
+
 def test_illness_age_groups_preserved():
     """연령대가 집계에서 유실되면 안 된다(80세 이상 비중 근거가 사라진다)."""
     regions = B.load_regions()
@@ -146,3 +227,13 @@ if __name__ == "__main__":
     print(f"OK: 위험도 점수는 최근 {B.SCORING_YEARS}년만 반영 (화면 표기는 전체 누적)")
     test_illness_age_groups_preserved()
     print("OK: 온열질환 연령대 보존 + 키 중복 없음")
+    test_region_coords_within_parent_sigungu()
+    print(f"OK: 모든 읍면동 중심점이 소속 시군구 {B.MAX_EMD_DISTANCE_KM}km 이내")
+    test_excluded_sigungu_absent_and_all_surveyed()
+    print("OK: 경북 아닌 지역 제외됨 + 모든 시군구에 쉼터 데이터 있음")
+    test_shelter_counts_are_per_region()
+    print("OK: 관내 쉼터 수가 지역별로 산출됨 (전국 총계 아님)")
+    test_blind_spot_is_not_almost_everything()
+    print("OK: 사각지대 비율이 변별력 있는 수준")
+    test_blind_spot_matches_distance_rule()
+    print(f"OK: 사각지대가 최근접 거리 {B.BLIND_SPOT_METERS}m 기준과 정확히 일치")

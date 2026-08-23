@@ -31,6 +31,11 @@ DB_PATH = os.path.join(BASE_DIR, "data", "hosu.db")
 # 최종 위험도 = 정적 기저 위험도 * (1 - a) + 실시간 기온 위험도 * a
 REALTIME_WEIGHT = 0.4
 
+# 판정 기준은 파이프라인에서 가져온다. 값을 여기 다시 적으면 한쪽만 바뀌었을 때
+# 서버가 실제 판정과 다른 설명을 내놓게 된다.
+sys.path.insert(0, os.path.join(BASE_DIR, "pipeline"))
+from build import BLIND_SPOT_METERS, WALK_SPEED_M_PER_MIN
+
 mcp = _Server(
     "hosu-heat-risk",
     instructions="경상북도 폭염 위험도와 대응 채널 커버리지를 조회하는 도구 모음. "
@@ -155,8 +160,8 @@ def get_heat_risk_score(region: str) -> dict:
         basis = f" ({v['base_year']}년 기준)" if v.get("base_year") else ""
         reasons.append(f"65세 이상 인구비율 {v.get('elderly_ratio', 0) * 100:.1f}%{basis}")
     if acc.get("is_blind_spot"):
-        reasons.append(f"도보 5분권(400m) 무더위쉼터 없음 — "
-                       f"최근접 {acc.get('nearest_distance_m', 0):.0f}m")
+        _d = acc.get("nearest_distance_m") or 0
+        reasons.append(f"가장 가까운 무더위쉼터가 {_d:.0f}m (도보 {_d / 80:.0f}분) — 도보권 밖")
     if prof and prof["total_cases"] and s["history_score"] >= 60:
         reasons.append(f"{r['sigungu']} 누적 온열질환 {prof['total_cases']}건 "
                        f"({prof['from_year']}~{prof['to_year']}, 시군구 단위 집계) 중 "
@@ -266,13 +271,24 @@ def get_shelter_coverage(region: str) -> dict:
     if not rows:
         return {"error": "쉼터 데이터 없음"}
     a = rows[0]
+    d = a["nearest_distance_m"]
+    is_emd = bool(r["eupmyeondong"])
     return {
         "region_name": region_label(r),
+        "level": "eupmyeondong" if is_emd else "sigungu",
         "shelter_count": a["shelter_count"],
+        "nearest_distance_m": d,
+        "nearest_walk_minutes": round(d / WALK_SPEED_M_PER_MIN, 1) if d is not None else None,
         "within_400m_count": a["within_400m_count"],
-        "nearest_distance_m": a["nearest_distance_m"],
-        "is_blind_spot": bool(a["is_blind_spot"]),
-        "note": "도보 5분(400m) 내 쉼터가 없으면 사각지대로 판정",
+        # 시군구는 수십 km에 걸쳐 있어 중심점 한 점으로 접근성을 말할 수 없다.
+        # 사각지대는 읍면동 단위 판정이므로 시군구는 null로 둔다(false가 아니다).
+        "is_blind_spot": None if a["is_blind_spot"] is None else bool(a["is_blind_spot"]),
+        "note": (
+            f"사각지대 = 마을 중심에서 최근접 쉼터까지 도보 "
+            f"{BLIND_SPOT_METERS // WALK_SPEED_M_PER_MIN}분({BLIND_SPOT_METERS}m) 초과"
+            if is_emd else
+            "시군구는 사각지대 판정 단위가 아님 — 쉼터 지표는 관할 읍면동 집계값"
+        ),
     }
 
 

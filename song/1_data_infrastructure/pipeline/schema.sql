@@ -26,12 +26,17 @@ CREATE TABLE IF NOT EXISTS vulnerability (
 );
 
 -- 3. 무더위쉼터 접근성 (준정적, 주 단위 갱신)
+-- 쉼터 배치·접근성. 세 지표가 서로 다른 질문에 답하므로 함께 봐야 한다.
 CREATE TABLE IF NOT EXISTS shelter_access (
     region_code        TEXT PRIMARY KEY REFERENCES regions(region_code),
-    shelter_count      INTEGER,           -- 관내 쉼터 총 개수
-    within_400m_count  INTEGER,           -- 중심점 기준 도보 5분(400m) 내 쉼터 수
-    nearest_distance_m REAL,              -- 최근접 쉼터까지 거리(m)
-    is_blind_spot      INTEGER,           -- 1이면 도보권 쉼터 없음 (사각지대)
+    shelter_count      INTEGER,           -- 관내 쉼터 수(근사). 주소의 읍면동명 우선,
+                                          -- 없으면 최근접 중심점 폴백 — 참고 지표용이며
+                                          -- 사각지대 판정에는 쓰지 않는다
+    within_400m_count  INTEGER,           -- 마을 중심점에서 도보 5분(400m) 내 쉼터 수
+                                          -- 주민 집 기준이 아니라 중심점 기준임에 유의
+    nearest_distance_m REAL,              -- 최근접 쉼터까지 거리(m), 행정구역 무관
+    is_blind_spot      INTEGER,           -- 1이면 최근접 쉼터가 도보 15분(1.2km) 밖.
+                                          -- NULL이면 해당 시군구가 쉼터 조사 대상이 아님
     updated_at         TEXT
 );
 
