@@ -12,6 +12,7 @@ API 키가 없는 환경에서는 data/raw/*.csv 샘플을 읽는다.
 import csv
 import math
 import os
+import re
 import sqlite3
 from datetime import datetime, timezone
 
@@ -20,7 +21,14 @@ DB_PATH = os.path.join(BASE_DIR, "data", "hosu.db")
 RAW_DIR = os.path.join(BASE_DIR, "data", "raw")
 SCHEMA_PATH = os.path.join(BASE_DIR, "pipeline", "schema.sql")
 
-WALK_5MIN_METERS = 400  # 도보 5분 기준 (국립재난안전연구원 분석 기준 차용)
+WALK_SPEED_M_PER_MIN = 80  # 보행 분속(m). 쉼터 도보 시간 환산에 공통으로 쓴다.
+WALK_5MIN_METERS = 400     # 도보 5분 (국립재난안전연구원 분석 기준 차용)
+
+# 사각지대 판정 거리. 마을 중심에서 최근접 쉼터까지 도보 15분을 넘으면
+# 마을 상당 부분이 사실상 걸어서 갈 수 없다고 본다 — 폭염 중 고령자 보행의 현실적 상한.
+# 400m(도보 5분)를 그대로 쓰면 읍면동의 67%가 걸린다. 그 기준은 원래 '주민 집 → 쉼터'
+# 거리인데 읍면동 중심점(몇 km 범위의 기하학적 중심)에 적용되기 때문이다.
+BLIND_SPOT_METERS = WALK_SPEED_M_PER_MIN * 15  # 1,200m
 SCORING_YEARS = 3       # 위험도 점수에 반영할 온열질환 최근 연도 수 (화면 표기는 전체 누적)
 MAX_EMD_DISTANCE_KM = 60  # 읍면동 중심점이 소속 시군구에서 이보다 멀면 좌표 오류로 본다
                           # (경북 실측 정상 최대 29.5km, 발견된 오류는 147km)
@@ -328,29 +336,65 @@ def _same_sigungu(region_sigungu, shelter_sigungu):
             or shelter_sigungu.startswith(region_sigungu + " "))
 
 
+def _address_emd(address):
+    """도로명주소에서 읍면동 후보를 뽑는다.
+
+    도심 주소는 도로명만 있고 동 이름이 괄호에만 있다("김천시 혁신4로 21 (율곡동)").
+    그래서 괄호 안을 먼저 본다.
+    """
+    inner = " ".join(re.findall(r"\((.*?)\)", address)).replace(",", " ")
+    return [t for t in (inner.split() + address.split())
+            if t.endswith(("읍", "면", "동", "가"))]
+
+
 def assign_shelters_to_regions(regions, shelters):
-    """각 쉼터를 소속 시군구 안에서 가장 가까운 읍면동에 배정해 관내 쉼터 수를 센다.
+    """각 쉼터를 소속 읍면동에 배정해 관내 쉼터 수를 센다. 참고 지표용 근사값이다.
 
-    읍면동 경계 데이터가 없으므로 '같은 시군구 + 최근접 중심점'으로 관내 여부를
-    근사한다. 시군구는 원본에 실제로 있는 값이라, 경계를 통째로 추측하는 것보다
-    훨씬 안전하다.
+    1순위는 주소에 적힌 읍면동명이다(약 76%). 좌표 근접만으로 배정하면
+    '사벌국면행정복지센터'처럼 이름부터 그 면 시설인데 중심점이 치우쳐 이웃 동으로
+    넘어가는 오배정이 생긴다.
 
-    중심점이 완전히 같은 행정동들(상대1동·상대2동·상대동 등 25개 그룹)은 물리적으로
-    같은 위치이므로 접근성도 같다 — 한 곳만 골라 나머지를 0개로 만들면 실제로는 없는
-    격차를 만들어내므로 동점은 모두에게 배정한다.
+    주소로 못 정하는 나머지는 같은 시군구 내 최근접 중심점으로 폴백한다. 주로 시(市)
+    지역 동(洞)인데, 주소의 법정동명(신음동 등)과 우리 데이터의 행정동명이 서로 달라
+    매핑 테이블 없이는 맞출 수 없기 때문이다. 도심 동은 조밀해 좌표 근접의 오차가 작다.
+
+    중심점이 완전히 같은 행정동들(상대1동·상대2동·상대동 등)은 물리적으로 같은 위치라
+    접근성도 같다 — 한 곳만 골라 나머지를 0개로 만들면 없는 격차를 만들므로 동점 배정한다.
+
+    이 값은 사각지대 판정에 쓰지 않는다(배정이 근사라 불안정). 판정은 최근접 거리로 한다.
     """
     emd = [r for r in regions if r["level"] == "eupmyeondong"]
+    by_name = {}
+    for r in emd:
+        by_name.setdefault(r["eupmyeondong"], []).append(r)
+
     counts = {r["region_code"]: 0 for r in regions}
+    by_address = 0
 
     for s in shelters:
         cands = [r for r in emd if _same_sigungu(r["sigungu"], s["sigungu"])]
         if not cands:
             continue
-        dists = [(haversine_m(r["lat"], r["lon"], s["lat"], s["lon"]), r) for r in cands]
-        nearest = min(d for d, _ in dists)
-        for d, r in dists:
-            if d <= nearest + 1e-6:
-                counts[r["region_code"]] += 1
+
+        matched = None
+        for token in _address_emd(s.get("road_address") or ""):
+            same_name = [r for r in cands if r["eupmyeondong"] == token]
+            if same_name:
+                matched = same_name
+                by_address += 1
+                break
+
+        if matched is None:
+            dists = [(haversine_m(r["lat"], r["lon"], s["lat"], s["lon"]), r) for r in cands]
+            nearest = min(d for d, _ in dists)
+            matched = [r for d, r in dists if d <= nearest + 1e-6]
+
+        for r in matched:
+            counts[r["region_code"]] += 1
+
+    if shelters:
+        print(f"      관내 쉼터 배정: 주소 기준 {by_address}건, "
+              f"좌표 폴백 {len(shelters) - by_address}건")
 
     # 시군구 행은 관할 읍면동의 합으로 집계한다(자기 중심점 기준이 아니라).
     for r in regions:
@@ -364,15 +408,15 @@ def assign_shelters_to_regions(regions, shelters):
 def compute_shelter_access(regions, shelters):
     """관내 무더위쉼터 배치 현황과 중심점 기준 접근성을 계산한다.
 
-    사각지대 = 관내에 지정된 쉼터가 없고, 이웃 마을 쉼터까지도 걸어갈 수 없는 곳.
-    두 조건을 모두 봐야 한다.
+    사각지대는 '마을 중심에서 최근접 쉼터까지의 거리' 하나로만 판정한다
+    (BLIND_SPOT_METERS 초과). 걸어갈 수 있으면 행정구역이 달라도 사각지대가 아니다.
 
-    - 중심점 400m만 보면: 400m는 원래 '주민 집 → 쉼터' 거리인데 읍면동 중심점(몇 km
-      범위의 기하학적 중심)에 적용돼, 마을이 잘 커버돼도 사각지대로 찍힌다(69% 해당).
-    - 관내 배치만 보면: 도심 동은 촘촘해서 바로 옆 쉼터가 이웃 동에 배정된다.
-      실제로 경주시 황오동은 288m 거리에 쉼터가 있는데도 관내 0개였다.
+    관내 소속 여부를 판정에 섞지 않는 이유: 읍면동 경계 데이터가 없어 배정이 근사일
+    수밖에 없고, 그 오차가 그대로 판정으로 새어나온다. 실제로 좌표 근접 배정에서는
+    '사벌국면행정복지센터'가 이웃 동으로 넘어가 자기 면이 관내 0개가 됐고, 주소 기반
+    배정은 법정동/행정동 불일치로 24%가 안 맞는다. 반면 최근접 거리는 배정 없이
+    정확히 계산되고 화면에서 그대로 검증된다.
 
-    걸어갈 수 있으면 행정구역이 달라도 사각지대가 아니다.
     within_400m_count는 '마을 중심에서 도보 5분 내'라는 별개 지표로 계속 제공한다.
     """
     now = datetime.now(timezone.utc).isoformat()
@@ -394,12 +438,11 @@ def compute_shelter_access(regions, shelters):
         # 최근접 거리는 시군구 경계를 넘어도 의미가 있다(이웃 마을 쉼터로 걸어갈 수 있음).
         dists = [haversine_m(reg["lat"], reg["lon"], s["lat"], s["lon"]) for s in shelters]
         nearest = min(dists) if dists else None
-        in_region = counts[reg["region_code"]]
-        walkable = nearest is not None and nearest <= WALK_5MIN_METERS
-        blind = None if reg["sigungu"] in unsurveyed else int(in_region == 0 and not walkable)
+        blind = (None if reg["sigungu"] in unsurveyed
+                 else int(nearest is not None and nearest > BLIND_SPOT_METERS))
         out.append({
             "region_code": reg["region_code"],
-            "shelter_count": in_region,
+            "shelter_count": counts[reg["region_code"]],
             "within_400m_count": sum(1 for d in dists if d <= WALK_5MIN_METERS),
             "nearest_distance_m": round(nearest, 1) if nearest else None,
             "is_blind_spot": blind,
@@ -537,7 +580,8 @@ def main():
     shelters = load_shelters()
     access = compute_shelter_access(regions, shelters)
     blind = sum(1 for a in access if a["is_blind_spot"])
-    print(f"      쉼터 {len(shelters)}곳 / 관내 쉼터 없고 도보권에도 없는 지역 {blind}곳")
+    print(f"      쉼터 {len(shelters)}곳 / 최근접 쉼터가 도보 "
+          f"{BLIND_SPOT_METERS // WALK_SPEED_M_PER_MIN}분 밖인 지역 {blind}곳")
 
     print("[4/6] 실시간 기상 실측 데이터 로드 (gyeongbuk_weather.csv)")
     weather = load_weather(regions)

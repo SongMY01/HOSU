@@ -163,8 +163,8 @@ def get_heat_risk_score(region: str) -> dict:
         basis = f" ({v['base_year']}년 기준)" if v.get("base_year") else ""
         reasons.append(f"65세 이상 인구비율 {v.get('elderly_ratio', 0) * 100:.1f}%{basis}")
     if acc.get("is_blind_spot"):
-        reasons.append(f"관내에 지정된 무더위쉼터 없음 — "
-                       f"최근접 쉼터까지 {acc.get('nearest_distance_m', 0):.0f}m")
+        _d = acc.get("nearest_distance_m") or 0
+        reasons.append(f"가장 가까운 무더위쉼터가 {_d:.0f}m (도보 {_d / 80:.0f}분) — 도보권 밖")
     if prof and prof["total_cases"] and s["history_score"] >= 60:
         reasons.append(f"{r['sigungu']} 누적 온열질환 {prof['total_cases']}건 "
                        f"({prof['from_year']}~{prof['to_year']}, 시군구 단위 집계) 중 "

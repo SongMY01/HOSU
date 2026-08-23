@@ -134,20 +134,25 @@ def test_blind_spot_is_not_almost_everything():
     assert ratio < 0.25, f"읍면동의 {ratio:.0%}가 사각지대 - 판정 기준을 다시 볼 것"
 
 
-def test_shelterless_region_has_distant_nearest():
-    """관내 쉼터가 없다고 판정된 곳은 최근접 거리도 도보권 밖이어야 자연스럽다.
-    바로 옆에 쉼터가 있는데 사각지대로 찍히면 배정 로직이 어긋난 것이다."""
+def test_blind_spot_matches_distance_rule():
+    """사각지대는 최근접 거리 하나로만 결정돼야 한다.
+
+    관내 소속 판정(배정 근사)이 판정에 섞이면, 쉼터가 코앞에 있는데 사각지대로 찍히는
+    오류가 계속 새어나온다 — 실제로 경주시 황오동(288m), 상주시 사벌국면(724m)이
+    그렇게 잘못 표시됐었다."""
     regions = B.load_regions()
     access = {a["region_code"]: a for a in B.compute_shelter_access(regions, B.load_shelters())}
     rmap = {r["region_code"]: r for r in regions}
 
-    too_close = [
-        (rmap[c]["sigungu"], rmap[c]["eupmyeondong"], a["nearest_distance_m"])
-        for c, a in access.items()
-        if a["is_blind_spot"] and rmap[c]["level"] == "eupmyeondong"
-        and (a["nearest_distance_m"] or 0) < B.WALK_5MIN_METERS
-    ]
-    assert not too_close, f"쉼터가 도보권에 있는데 사각지대로 판정됨: {too_close}"
+    wrong = []
+    for code, a in access.items():
+        if a["is_blind_spot"] is None:  # 쉼터 미조사 시군구는 판정 대상이 아니다
+            continue
+        d = a["nearest_distance_m"]
+        expected = int(d is not None and d > B.BLIND_SPOT_METERS)
+        if a["is_blind_spot"] != expected:
+            wrong.append((rmap[code]["sigungu"], rmap[code]["eupmyeondong"], d))
+    assert not wrong, f"거리 기준과 판정이 어긋남: {wrong[:5]}"
 
 
 def test_region_coords_within_parent_sigungu():
@@ -209,5 +214,5 @@ if __name__ == "__main__":
     print("OK: 관내 쉼터 수가 지역별로 산출됨 (전국 총계 아님)")
     test_blind_spot_is_not_almost_everything()
     print("OK: 사각지대 비율이 변별력 있는 수준")
-    test_shelterless_region_has_distant_nearest()
-    print("OK: 도보권에 쉼터가 있는데 사각지대로 찍힌 곳 없음")
+    test_blind_spot_matches_distance_rule()
+    print(f"OK: 사각지대가 최근접 거리 {B.BLIND_SPOT_METERS}m 기준과 정확히 일치")
