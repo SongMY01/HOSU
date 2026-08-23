@@ -20,7 +20,7 @@ function BreakdownBar({ label, score }) {
   );
 }
 
-export default function DetailPanel({ region, onClose, onFlyTo }) {
+export default function DetailPanel({ region, onClose, onFlyTo, onShowAreaShelters }) {
   const [areaShelters, setAreaShelters] = useState([]);
   const [sheltersLoading, setSheltersLoading] = useState(false);
   const [sheltersLoaded, setSheltersLoaded] = useState(false);
@@ -41,14 +41,23 @@ export default function DetailPanel({ region, onClose, onFlyTo }) {
   async function loadAreaShelters() {
     setSheltersLoading(true);
     try {
-      const data = await fetchShelters({ sigungu: r.sigungu, limit: 100 });
-      setAreaShelters(data.shelters);
+      const data = await fetchShelters({
+        sigungu: r.sigungu,
+        q: r.eupmyeondong || undefined,
+        limit: 100
+      });
+      let list = data.shelters || [];
+      if (list.length === 0 && r.eupmyeondong) {
+        const fallbackData = await fetchShelters({ sigungu: r.sigungu, limit: 100 });
+        list = fallbackData.shelters || [];
+      }
+      setAreaShelters(list);
       setSheltersLoaded(true);
-      if (data.shelters.length > 0) {
-        onFlyTo({ lat: r.lat, lon: r.lon, zoom: r.level === 'sigungu' ? 11 : 13 });
+      if (onShowAreaShelters) {
+        onShowAreaShelters(list, { lat: r.lat, lon: r.lon, zoom: r.level === 'sigungu' ? 11 : 14 });
       }
     } catch (e) {
-      console.error(e);
+      console.error('쉼터 로드 실패:', e);
     } finally {
       setSheltersLoading(false);
     }

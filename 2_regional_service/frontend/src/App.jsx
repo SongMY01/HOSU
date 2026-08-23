@@ -52,6 +52,14 @@ export default function App() {
     setFlyTarget({ lat: r.lat, lon: r.lon, zoom: r.level === 'sigungu' ? 11 : 13 });
   }, [regions]);
 
+  const handleShowAreaShelters = useCallback((newShelters, target) => {
+    setShelters(newShelters);
+    setShowShelters(true);
+    if (target) {
+      setFlyTarget(target);
+    }
+  }, []);
+
   const handleCloseDetail = useCallback(() => {
     setSelectedRegion(null);
   }, []);
@@ -101,6 +109,7 @@ export default function App() {
           region={selectedRegion}
           onClose={handleCloseDetail}
           onFlyTo={handleFlyTo}
+          onShowAreaShelters={handleShowAreaShelters}
         />
       )}
     </div>
